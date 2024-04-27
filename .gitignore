@@ -1,3 +1,5 @@
+.env
+
 # python generated files
 __pycache__/
 *.py[oc]
