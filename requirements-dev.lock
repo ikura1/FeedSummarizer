@@ -14,12 +14,17 @@ anyio==4.3.0
     # via httpx
     # via openai
 bandit==1.7.5
+beautifulsoup4==4.12.3
+    # via feedsummarizer
 black==23.7.0
 certifi==2024.2.2
     # via httpcore
     # via httpx
+    # via requests
 cfgv==3.4.0
     # via pre-commit
+charset-normalizer==3.3.2
+    # via requests
 click==8.1.7
     # via black
 distlib==0.3.7
@@ -48,6 +53,7 @@ identify==2.5.27
 idna==3.7
     # via anyio
     # via httpx
+    # via requests
 isort==5.12.0
     # via flake8-isort
 markdown-it-py==3.0.0
@@ -85,6 +91,8 @@ pygments==2.16.1
 pyyaml==6.0.1
     # via bandit
     # via pre-commit
+requests==2.31.0
+    # via feedsummarizer
 rich==13.5.2
     # via bandit
 setuptools==68.1.2
@@ -97,6 +105,8 @@ sniffio==1.3.1
     # via anyio
     # via httpx
     # via openai
+soupsieve==2.5
+    # via beautifulsoup4
 stevedore==5.1.0
     # via bandit
 tqdm==4.66.2
@@ -105,5 +115,7 @@ typing-extensions==4.11.0
     # via openai
     # via pydantic
     # via pydantic-core
+urllib3==2.2.1
+    # via requests
 virtualenv==20.24.3
     # via pre-commit
