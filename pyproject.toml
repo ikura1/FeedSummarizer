@@ -1,18 +1,16 @@
 [project]
-name = "pythontemplateproject"
+name = "feedsummarizer"
 version = "0.1.0"
 description = "Add your description here"
 authors = [
     { name = "ikura1", email = "ikura.lab@gmail.com" }
 ]
 dependencies = [
+    "feedparser>=6.0.11",
+    "openai>=1.23.6",
 ]
 readme = "README.md"
 requires-python = ">= 3.8"
-
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
 
 [tool.rye]
 managed = true
