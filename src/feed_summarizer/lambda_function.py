@@ -2,6 +2,7 @@ import json
 from datetime import datetime, timezone
 
 import boto3
+import feedparser
 
 from .consts import BUCKET_NAME, OBJECT_KEY
 
@@ -49,3 +50,21 @@ def get_last_run_time(
         return datetime.fromisoformat(last_run_time)
     except s3_client.exceptions.NoSuchKey:
         return datetime.min.replace(tzinfo=timezone.utc)
+
+
+def fetch_feed(feed_url: str):
+    return feedparser.parse(feed_url)
+
+
+def filter_feed_entries(feed, last_run_time: datetime):
+    # 各記事のタイトルとリンクを出力
+    filtered_entries = []
+    for entry in feed.entries:
+        # RSSフィードの登録日時をdatetimeオブジェクトに変換
+        entry_date = datetime.fromisoformat(entry.date)
+
+        # 最終実行時間と比較
+        if entry_date > last_run_time:
+            filtered_entries.append(entry)
+
+    return filtered_entries
