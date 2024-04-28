@@ -29,3 +29,6 @@ dev-dependencies = [
 
 [tool.hatch.metadata]
 allow-direct-references = true
+
+[tool.bandit]
+exclude_dirs = ["tests/"]

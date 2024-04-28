@@ -29,10 +29,7 @@ repos:
     rev: 1.7.5
     hooks:
       - id: bandit
-        args:
-          - --recursive
-          - --ini
-          - .bandit.yml
+        args: ["--recursive", "-c", "pyproject.toml"]
 
 # sets up .pre-commit-ci.yaml to ensure pre-commit dependencies stay up to date
 ci:
