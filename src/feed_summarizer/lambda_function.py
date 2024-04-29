@@ -29,6 +29,16 @@ def lambda_handler(_event, _context):
     }
 
 
+def set_last_run_time(
+    s3_client: boto3.Session, bucket_name: str, object_key: str, current_time: datetime
+):
+    s3_client.put_object(
+        Bucket=bucket_name,
+        Key=object_key,
+        Body=json.dumps({"last_run_time": current_time.isoformat()}),
+    )
+
+
 def get_last_run_time(
     s3_client: boto3.Session, bucket_name: str, object_key: str
 ) -> datetime:
