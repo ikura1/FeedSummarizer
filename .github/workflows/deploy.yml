@@ -30,9 +30,9 @@ jobs:
       - name: create deployment package
         run: |
           cd package
-          zip -r ../package.zip .
-          cd ..
-          zip -rg package.zip src/feed_summarizer/
+          zip -r9 ../package.zip .
+          cd ../src/feed_summarizer
+          zip -rg package.zip *.py
 
       - name: lambda update
         run: |
