@@ -25,12 +25,12 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           mkdir -p package
-          pip install -r src/feed_summarizer/requirements.txt -t ./package
+          pip install -r requirements.lock --target ./package
 
       - name: create deployment package
         run: |
           cd package
-          zip -r9 ../package.zip .
+          zip -r ../package.zip .
           cd ..
           zip -rg package.zip src/feed_summarizer/
 
