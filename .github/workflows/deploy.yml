@@ -25,7 +25,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           mkdir -p package
-          pip install -r requirements.lock --target ./package
+          pip install --target ./package -r requirements.lock
 
       - name: create deployment package
         run: |
