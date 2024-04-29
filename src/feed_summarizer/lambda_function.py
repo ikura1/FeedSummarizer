@@ -1,32 +1,43 @@
 import json
+import os
 from datetime import datetime, timezone
 
 import boto3
 import feedparser
+import requests
 
-from .consts import BUCKET_NAME, OBJECT_KEY
+from .consts import BUCKET_NAME, OBJECT_KEY, REQUEST_TIMEOUT
 
 s3 = boto3.client("s3")
 
 
 def lambda_handler(_event, _context):
-    # 前回の実行時間をS3から取得
-    last_run_time = get_last_run_time(s3, BUCKET_NAME, OBJECT_KEY)
-    # post_feed(datetime.fromisoformat(last_run_time))
+    # 環境変数から設定を読み込む
+    feed_url = os.environ.get("RSS_FEED_URL")
+    slack_webhook_url = os.environ.get("SLACK_WEBHOOK_URL")
 
-    # 現在の実行時間を保存
-    current_time = datetime.now(timezone.utc).isoformat()
-    s3.put_object(
-        Bucket=BUCKET_NAME,
-        Key=OBJECT_KEY,
-        Body=json.dumps({"last_run_time": current_time}),
-    )
-    return {
-        "statusCode": 200,
-        "body": json.dumps(
-            f"Last run time was: {last_run_time}, current time is: {current_time}"
-        ),
-    }
+    # S3 クライアントの初期化
+    s3_client = boto3.client("s3")
+
+    # 最終実行時間を S3 から取得
+    last_run_time = get_last_run_time(s3_client, BUCKET_NAME, OBJECT_KEY)
+
+    # RSSフィードを読み込む
+    feed = fetch_feed(feed_url)
+
+    # 最終実行時間以降の記事をフィルタリング
+    filtered_entries = filter_feed_entries(feed, last_run_time)
+
+    # Slackに通知を送信
+    for entry in filtered_entries:
+        post_to_slack(slack_webhook_url, entry.link)
+
+    # 現在の実行時刻を最新の実行時間としてS3に保存
+    current_time = datetime.now(timezone.utc)
+    set_last_run_time(s3_client, BUCKET_NAME, OBJECT_KEY, current_time)
+
+    # 処理結果を返す
+    return {"statusCode": 200, "body": f"Processed {len(filtered_entries)} entries."}
 
 
 def set_last_run_time(
@@ -78,3 +89,10 @@ def filter_feed_entries(feed, last_run_time: datetime):
             filtered_entries.append(entry)
 
     return filtered_entries
+
+
+# Slackにメッセージを投稿する関数
+def post_to_slack(webhook_url, message):
+    payload = {"text": message}
+    response = requests.post(webhook_url, json=payload, timeout=REQUEST_TIMEOUT)
+    return response
