@@ -33,7 +33,7 @@ def lambda_handler(_event, _context):
     entry = filter_feed_entry(feed, last_run_time)
 
     if entry is None:
-        return
+        return {"statusCode": 200, "body": "No new entries."}
     # Slackに通知を送信
     post_to_slack(slack_webhook_url, entry.link)
 
