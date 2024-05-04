@@ -37,7 +37,7 @@ jobs:
 
       - name: create deployment package
         run: |
-          cd src/feed_summarizer
+          cd src/FeedSummarizer
           zip -rg ../../code.zip *.py
           cd ../../
 
