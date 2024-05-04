@@ -32,7 +32,7 @@ jobs:
         run: |
           result=$(aws lambda publish-layer-version --layer-name lambda-feedsumarizer --zip-file fileb://dependencies.zip)
           LAYER_VERSION_ARN=$(jq -r '.LayerVersionArn' <<< "$result")
-          echo $LAYER_VERSION_ARN >> $GITHUB_ENV
+          echo "LAYER_VERSION_ARN=$LAYER_VERSION_ARN" >> $GITHUB_ENV
           rm -rf python
           rm dependencies.zip
 
