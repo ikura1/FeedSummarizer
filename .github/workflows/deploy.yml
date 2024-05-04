@@ -23,29 +23,32 @@ jobs:
 
       - name: install dependencies
         run: |
-          python -m pip install --upgrade pip
+          python -m pip install --upgrade pip > /dev/null 2>&1
           mkdir python
-          pip install --target=python -r requirements.lock
-          zip -r dependencies.zip ./python
+          pip install --target=python -r requirements.lock > /dev/null 2>&1
+          zip -r dependencies.zip ./python > /dev/null 2>&1
 
       - name: publish dependencies
         run: |
           result=$(aws lambda publish-layer-version --layer-name lambda-feedsumarizer --zip-file fileb://dependencies.zip)
           LAYER_VERSION_ARN=$(jq -r '.LayerVersionArn' <<< "$result")
+          echo $LAYER_VERSION_ARN
           rm -rf python
           rm dependencies.zip
 
       - name: create deployment package
         run: |
+          echo $LAYER_VERSION_ARN
           cd src/FeedSummarizer
           zip -rg ../../code.zip *.py
           cd ../../
 
       - name: lambda update
         run: |
-          aws lambda update-function-code --function-name FeedSummarizer --zip-file fileb://code.zip --region "us-east-1"
+          aws lambda update-function-code --function-name FeedSummarizer --zip-file fileb://code.zip --region "us-east-1" > /dev/null 2>&1
 
       - name: lambda update layer
         run: |
-          aws lambda wait function-updated --function-name FeedSummarizer --region "us-east-1"
-          aws lambda update-function-configuration --function-name FeedSummarizer --layers $LAYER_VERSION_ARN --region "us-east-1"
+          echo $LAYER_VERSION_ARN
+          aws lambda wait function-updated --function-name FeedSummarizer --region "us-east-1" > /dev/null 2>&1
+          aws lambda update-function-configuration --function-name FeedSummarizer --layers $LAYER_VERSION_ARN --region "us-east-1" > /dev/null 2>&1
