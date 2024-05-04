@@ -30,18 +30,19 @@ def lambda_handler(_event, _context):
     feed = fetch_feed(feed_url)
 
     # 最終実行時間以降の記事をフィルタリング
-    filtered_entries = filter_feed_entries(feed, last_run_time)
+    entry = filter_feed_entry(feed, last_run_time)
 
+    if entry is None:
+        return
     # Slackに通知を送信
-    for entry in filtered_entries:
-        post_to_slack(slack_webhook_url, entry.link)
+    post_to_slack(slack_webhook_url, entry.link)
 
-    # 現在の実行時刻を最新の実行時間としてS3に保存
-    current_time = datetime.now(timezone.utc)
-    set_last_run_time(s3_client, BUCKET_NAME, OBJECT_KEY, current_time)
+    # 最後に共有した日時を実行時間としてS3に保存
+    entry_time = datetime.fromisoformat(entry.date)
+    set_last_run_time(s3_client, BUCKET_NAME, OBJECT_KEY, entry_time)
 
     # 処理結果を返す
-    return {"statusCode": 200, "body": f"Processed {len(filtered_entries)} entries."}
+    return {"statusCode": 200, "body": "Processed 1 entries."}
 
 
 def set_last_run_time(
@@ -81,18 +82,15 @@ def fetch_feed(feed_url: str):
     return feedparser.parse(feed_url)
 
 
-def filter_feed_entries(feed, last_run_time: datetime):
+def filter_feed_entry(feed, last_run_time: datetime):
     # 各記事のタイトルとリンクを出力
-    filtered_entries = []
-    for entry in feed.entries:
+    for entry in reversed(feed.entries):
         # RSSフィードの登録日時をdatetimeオブジェクトに変換
         entry_date = datetime.fromisoformat(entry.date)
 
         # 最終実行時間と比較
         if entry_date > last_run_time:
-            filtered_entries.append(entry)
-
-    return filtered_entries
+            return entry
 
 
 # Slackにメッセージを投稿する関数
