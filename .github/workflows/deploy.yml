@@ -33,14 +33,16 @@ jobs:
           result=$(aws lambda publish-layer-version --layer-name lambda-feedsumarizer --zip-file fileb://dependencies.zip)
           LAYER_VERSION_ARN=$(jq -r '.LayerVersionArn' <<< "$result")
           echo $LAYER_VERSION_ARN
+          echo "RESULT=example_data" >> $GITHUB_ENV
           rm -rf python
           rm dependencies.zip
 
       - name: create deployment package
         run: |
           echo $LAYER_VERSION_ARN
+          echo $GITHUB_ENV
           cd src/FeedSummarizer
-          zip -rg ../../code.zip *.py
+          zip ../../code.zip *.py
           cd ../../
 
       - name: lambda update
