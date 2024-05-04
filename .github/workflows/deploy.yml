@@ -43,8 +43,9 @@ jobs:
 
       - name: lambda update
         run: |
-          aws lambda update-function-configuration --function-name FeedSummarizer --region "us-east-1"
-          sleep 20
           aws lambda update-function-code --function-name FeedSummarizer --zip-file fileb://code.zip --region "us-east-1"
-          sleep 60
+
+      - name: lambda update layer
+        run: |
+          aws lambda wait function-updated --function-name FeedSummarizer --region "us-east-1"
           aws lambda update-function-configuration --function-name FeedSummarizer --layers $LAYER_VERSION_ARN --region "us-east-1"
