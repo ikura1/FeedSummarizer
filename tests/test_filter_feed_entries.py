@@ -3,7 +3,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from FeedSummarizer.lambda_function import filter_feed_entries
+from FeedSummarizer.lambda_function import filter_feed_entry
 
 
 # モックフィードデータの準備
@@ -37,8 +37,7 @@ def test_filter_feed_entries(mock_feed):
     last_run_time = datetime.fromisoformat("2021-09-10T12:00:00Z")
 
     # 関数実行
-    result = filter_feed_entries(mock_feed, last_run_time)
+    result = filter_feed_entry(mock_feed, last_run_time)
 
     # 結果の検証
-    assert len(result) == 1  # 1つのエントリが期待される
-    assert result[0].title == "New Article"  # 新しい記事のみがフィルタされる
+    assert result.title == "New Article"  # 新しい記事のみがフィルタされる
