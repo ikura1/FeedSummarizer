@@ -1,4 +1,4 @@
-from feed_summarizer.lambda_function import fetch_feed
+from FeedSummarizer.lambda_function import fetch_feed
 
 
 def test_fetch_feed():

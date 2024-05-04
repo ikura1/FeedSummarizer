@@ -6,7 +6,7 @@ import boto3
 import feedparser
 import requests
 
-from .consts import BUCKET_NAME, OBJECT_KEY, REQUEST_TIMEOUT
+from FeedSummarizer.consts import BUCKET_NAME, OBJECT_KEY, REQUEST_TIMEOUT
 
 s3 = boto3.client("s3")
 

@@ -5,8 +5,8 @@ import boto3
 import pytest
 from moto import mock_aws
 
-from feed_summarizer.consts import OBJECT_KEY, REGION
-from feed_summarizer.lambda_function import get_last_run_time, set_last_run_time
+from FeedSummarizer.consts import OBJECT_KEY, REGION
+from FeedSummarizer.lambda_function import get_last_run_time, set_last_run_time
 
 
 @mock_aws

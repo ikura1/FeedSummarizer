@@ -3,7 +3,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from feed_summarizer.lambda_function import filter_feed_entries
+from FeedSummarizer.lambda_function import filter_feed_entries
 
 
 # モックフィードデータの準備
