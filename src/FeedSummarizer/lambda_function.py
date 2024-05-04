@@ -6,7 +6,11 @@ import boto3
 import feedparser
 import requests
 
-from FeedSummarizer.consts import BUCKET_NAME, OBJECT_KEY, REQUEST_TIMEOUT
+BUCKET_NAME = "feedsummarizer"
+OBJECT_KEY = "last_run_time.json"
+REGION = "us-east-1"
+REQUEST_TIMEOUT = 5
+
 
 s3 = boto3.client("s3")
 
