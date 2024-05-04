@@ -1,6 +1,6 @@
 import responses
 
-from feed_summarizer.lambda_function import post_to_slack
+from FeedSummarizer.lambda_function import post_to_slack
 
 
 # テストケース
