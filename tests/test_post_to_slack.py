@@ -9,11 +9,15 @@ def test_post_to_slack():
     webhook_url = (
         "https://hooks.slack.com/services/T00000000/B00000000/XXXXXXXXXXXXXXXXXXXXXXXX"
     )
-    message = "Hello, world!"
+    comment = "あとでよむ"
+    title = "タイトル"
+    entry_url = "https://example.com"
+    image_url = "https://example.com/image.jpg"
+    summary = "Hello, world!"
     responses.add(responses.POST, webhook_url, json={"status": "ok"}, status=200)
 
     # 関数を実行
-    response = post_to_slack(webhook_url, message)
+    response = post_to_slack(webhook_url, entry_url, title, summary, comment, image_url)
 
     # 結果の検証
     assert response.status_code == 200
