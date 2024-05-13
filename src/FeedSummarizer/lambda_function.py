@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 
 import boto3
 import feedparser
+import openai
 import requests
 from bs4 import BeautifulSoup
 from extractcontent3 import ExtractContent
@@ -14,6 +15,9 @@ OBJECT_KEY = "last_run_time.json"
 REGION = "us-east-1"
 REQUEST_TIMEOUT = 5
 SLACK_WEBHOOK_URL = os.environ.get("SLACK_WEBHOOK_URL")
+MAX_TOKEN_LENGTH = 15000
+MAX_RETRIES = 3
+DECREMENT_TOKEN = 1000
 
 s3 = boto3.client("s3")
 
@@ -124,22 +128,28 @@ def extract_ogp_image(soup):
 def summarize_text(title, text):
     """テキストを要約する関数"""
     client = OpenAI()
-    # OpenAI APIを使用してテキストの要約を実行
-    response = client.chat.completions.create(
-        model="gpt-3.5-turbo",
-        messages=[
-            {"role": "system", "content": "You are a helpful assistant."},
-            {"role": "assistant", "content": f"【Title】{title}\n###\n{text}"},
-            {
-                "role": "user",
-                "content": """
-                この記事の内容について、技術的な視点で要約をしてください。
-                3点の箇条書きでお願いします。
-                lang:ja
-                """,
-            },
-        ],
-    )
+    for _ in range(MAX_RETRIES):
+        try:
+            # OpenAI APIを使用してテキストの要約を実行
+            response = client.chat.completions.create(
+                model="gpt-3.5-turbo",
+                messages=[
+                    {"role": "system", "content": "You are a helpful assistant."},
+                    {"role": "assistant", "content": f"【Title】{title}\n###\n{text}"},
+                    {
+                        "role": "user",
+                        "content": """
+                        この記事の内容について、技術的な視点で要約をしてください。
+                        3点の箇条書きでお願いします。
+                        lang:ja
+                        """,
+                    },
+                ],
+            )
+        except openai.BadRequestError as e:
+            print(e)
+            text_length = min(len(text), MAX_TOKEN_LENGTH)
+            text = text[: text_length - DECREMENT_TOKEN]
     if len(response.choices) < 1:
         return ""
     return response.choices[0].message.content
