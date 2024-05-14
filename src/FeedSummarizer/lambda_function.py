@@ -1,6 +1,7 @@
 import json
 import os
 from datetime import datetime, timezone
+from tempfile import TemporaryFile
 
 import boto3
 import feedparser
@@ -9,6 +10,7 @@ import requests
 from bs4 import BeautifulSoup
 from extractcontent3 import ExtractContent
 from openai import OpenAI
+from pypdf import PdfReader
 
 BUCKET_NAME = "feedsummarizer"
 OBJECT_KEY = "last_run_time.json"
@@ -42,9 +44,14 @@ def lambda_handler(_event, _context):
         return {"statusCode": 200, "body": "No new entries."}
 
     res = requests.get(entry.link, timeout=REQUEST_TIMEOUT)
-    soup = BeautifulSoup(res.text, "html.parser")
-    img_url = extract_ogp_image(soup)
-    entry_text = extract_content(res.text)
+    img_url = None
+
+    if res.headers["Content-Type"] == "application/pdf":
+        entry_text = extract_text_from_pdf(res.content)
+    else:
+        soup = BeautifulSoup(res.text, "html.parser")
+        img_url = extract_ogp_image(soup)
+        entry_text = extract_content_from_html(res.text)
     summary = summarize_text(entry.title, entry_text)
     # Slackに通知を送信
     post_to_slack(
@@ -107,7 +114,7 @@ def filter_feed_entry(feed, last_run_time: datetime):
             return entry
 
 
-def extract_content(html):
+def extract_content_from_html(html):
     """URLからコンテンツとタイトルを抽出するヘルパー関数"""
     extractor = ExtractContent()
     opt = {"threshold": 0}
@@ -181,3 +188,16 @@ def post_to_slack(webhook_url, entry_url, title, summary, comment, img_url):
     }
     response = requests.post(webhook_url, json=payload, timeout=REQUEST_TIMEOUT)
     return response
+
+
+def extract_text_from_pdf(binary):
+    with TemporaryFile() as f:
+        f.write(binary)
+        f.seek(0)
+        pdf = PdfReader(f)
+        text = ""
+        page_length = len(pdf.pages)
+        for page_num in range(page_length):
+            page = pdf.pages[page_num]
+            text += page.extract_text()
+        return text
