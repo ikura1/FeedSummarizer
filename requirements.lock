@@ -24,8 +24,12 @@ certifi==2024.2.2
     # via httpcore
     # via httpx
     # via requests
+cffi==1.16.0
+    # via cryptography
 charset-normalizer==3.3.2
     # via requests
+cryptography==42.0.7
+    # via feedsummarizer
 distro==1.9.0
     # via openai
 extractcontent3==0.0.2
@@ -47,6 +51,8 @@ jmespath==1.0.1
     # via botocore
 openai==1.23.6
     # via feedsummarizer
+pycparser==2.22
+    # via cffi
 pydantic==2.7.1
     # via openai
 pydantic-core==2.18.2

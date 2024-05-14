@@ -36,7 +36,8 @@ charset-normalizer==3.3.2
     # via requests
 click==8.1.7
     # via black
-cryptography==42.0.5
+cryptography==42.0.7
+    # via feedsummarizer
     # via moto
 distlib==0.3.7
     # via virtualenv
