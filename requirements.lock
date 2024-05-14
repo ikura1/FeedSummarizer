@@ -51,6 +51,8 @@ pydantic==2.7.1
     # via openai
 pydantic-core==2.18.2
     # via pydantic
+pypdf==4.2.0
+    # via feedsummarizer
 python-dateutil==2.9.0.post0
     # via botocore
 requests==2.31.0

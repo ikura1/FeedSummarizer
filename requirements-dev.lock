@@ -117,6 +117,8 @@ pyflakes==2.5.0
     # via flake8
 pygments==2.16.1
     # via rich
+pypdf==4.2.0
+    # via feedsummarizer
 pytest==8.2.0
 python-dateutil==2.9.0.post0
     # via botocore
