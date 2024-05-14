@@ -191,7 +191,7 @@ def post_to_slack(webhook_url, entry_url, title, summary, comment, img_url):
 
 
 def extract_text_from_pdf(binary):
-    with TemporaryFile() as f:
+    with TemporaryFile(buffering=0) as f:
         f.write(binary)
         f.seek(0)
         pdf = PdfReader(f)
