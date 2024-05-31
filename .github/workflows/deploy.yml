@@ -1,8 +1,10 @@
 name: Deploy
 on:
-  push:
-    branches:
-      - master
+  workflow_run:
+    workflows: ["Lint"]
+    branches: ["master", "main"]
+    types:
+      - completed
 jobs:
   build-deploy:
     runs-on: ubuntu-latest
