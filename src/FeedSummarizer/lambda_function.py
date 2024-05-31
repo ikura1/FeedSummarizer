@@ -162,6 +162,14 @@ def summarize_text(title, text):
     return response.choices[0].message.content
 
 
+def simple_post_to_slack(webhook_url, text):
+    payload = {
+        "text": text,
+    }
+    response = requests.post(webhook_url, json=payload, timeout=REQUEST_TIMEOUT)
+    return response
+
+
 # Slackにメッセージを投稿する関数
 def post_to_slack(webhook_url, entry_url, title, summary, comment, img_url):
     payload = {
