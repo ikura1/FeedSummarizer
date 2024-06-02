@@ -41,5 +41,7 @@ def test_simple_post_to_slack():
 
     # 結果の検証
     assert response.status_code == 200
-    assert responses.calls[0].request.body == b'{"text": "Hello, world!"}'
+    assert responses.calls[0].request.body == snapshot(
+        b'{"unfurl_links": true, "blocks": [{"type": "section", "text": {"type": "mrkdwn", "text": "Reference: <Hello, world!>"}}]}'
+    )
     assert len(responses.calls) == 1, "Should have made one HTTP call to Slack"
