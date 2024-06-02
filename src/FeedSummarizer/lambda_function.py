@@ -23,6 +23,8 @@ DECREMENT_TOKEN = 1000
 
 s3 = boto3.client("s3")
 
+SKIP_DOMAINS = ["https://twitter.com", "https://x.com/"]
+
 
 def lambda_handler(_event, _context):
     # 環境変数から設定を読み込む
@@ -43,20 +45,30 @@ def lambda_handler(_event, _context):
     if entry is None:
         return {"statusCode": 200, "body": "No new entries."}
 
-    res = requests.get(entry.link, timeout=REQUEST_TIMEOUT)
-    img_url = None
-
-    if res.headers["Content-Type"] == "application/pdf":
-        entry_text = extract_text_from_pdf(res.content)
+    # AWSからでは、HTMLを取得できないドメインはUrlのみを投稿
+    if any([entry.link.startWith(domain) for domain in SKIP_DOMAINS]):
+        simple_post_to_slack(SLACK_WEBHOOK_URL, entry.link)
     else:
-        soup = BeautifulSoup(res.text, "html.parser")
-        img_url = extract_ogp_image(soup)
-        entry_text = extract_content_from_html(res.text)
-    summary = summarize_text(entry.title, entry_text)
-    # Slackに通知を送信
-    post_to_slack(
-        SLACK_WEBHOOK_URL, entry.link, entry.title, summary, entry.description, img_url
-    )
+        res = requests.get(entry.link, timeout=REQUEST_TIMEOUT)
+        img_url = None
+
+        if res.headers["Content-Type"] == "application/pdf":
+            entry_text = extract_text_from_pdf(res.content)
+        else:
+            soup = BeautifulSoup(res.text, "html.parser")
+            img_url = extract_ogp_image(soup)
+            entry_text = extract_content_from_html(res.text)
+        summary = summarize_text(entry.title, entry_text)
+
+        # Slackに通知を送信
+        post_to_slack(
+            SLACK_WEBHOOK_URL,
+            entry.link,
+            entry.title,
+            summary,
+            entry.description,
+            img_url,
+        )
 
     # 最後に共有した日時を実行時間としてS3に保存
     entry_time = datetime.fromisoformat(entry.date)
