@@ -164,9 +164,22 @@ def summarize_text(title, text):
 
 def simple_post_to_slack(webhook_url, text):
     payload = {
-        "text": text,
+        "unfurl_links": True,
+        "blocks": [
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": f"Reference: <{text}>",
+                },
+            }
+        ],
     }
-    response = requests.post(webhook_url, json=payload, timeout=REQUEST_TIMEOUT)
+    response = requests.post(
+        webhook_url,
+        json=payload,
+        timeout=REQUEST_TIMEOUT,
+    )
     return response
 
 
