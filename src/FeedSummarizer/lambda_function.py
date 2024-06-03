@@ -46,7 +46,7 @@ def lambda_handler(_event, _context):
         return {"statusCode": 200, "body": "No new entries."}
 
     # AWSからでは、HTMLを取得できないドメインはUrlのみを投稿
-    if any([entry.link.startWith(domain) for domain in SKIP_DOMAINS]):
+    if any([entry.link.startswith(domain) for domain in SKIP_DOMAINS]):
         simple_post_to_slack(SLACK_WEBHOOK_URL, entry.link)
     else:
         res = requests.get(entry.link, timeout=REQUEST_TIMEOUT)
