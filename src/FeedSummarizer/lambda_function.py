@@ -58,7 +58,7 @@ def lambda_handler(_event, _context):
         else:
             soup = BeautifulSoup(res.text, "html.parser")
             img_url = extract_ogp_image(soup)
-            entry_text = extract_content_from_html(res.text)
+            entry_text = get_content_text(entry.link, res.text)
         summary = summarize_text(entry.title, entry_text)
 
         # Slackに通知を送信
@@ -140,7 +140,16 @@ def filter_feed_entry(feed, last_run_time: datetime):
             return entry
 
 
-def extract_content_from_html(html) -> str:
+def get_content_text(url: str, text: str) -> str:
+    """URLからコンテンツのテキストを取得する関数"""
+    # reader apiを使用してテキストを取得
+    friendly_text = get_llm_friendly_text(url)
+    if friendly_text:
+        return friendly_text
+    return extract_content_from_html(text)
+
+
+def extract_content_from_html(html: str) -> str:
     """URLからコンテンツとタイトルを抽出するヘルパー関数"""
     extractor = ExtractContent()
     opt = {"threshold": 0}
@@ -277,3 +286,18 @@ def extract_text_from_pdf(binary):
             page = pdf.pages[page_num]
             text += page.extract_text()
         return text
+
+
+def get_llm_friendly_text(url: str) -> str:
+    """https://jina.ai/reader/ APIを使用して、URLからテキストを取得する
+
+    Args:
+        url (str): 要約するURL
+
+    Returns:
+        str: URLから取得したテキスト
+    """
+    res = requests.get(f"https://r.jina.ai/{url}", timeout=REQUEST_TIMEOUT)
+    if res.status_code != 200:
+        return None
+    return res.text
