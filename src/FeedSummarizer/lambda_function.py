@@ -27,6 +27,7 @@ SKIP_DOMAINS = ["https://twitter.com", "https://x.com/"]
 
 
 def lambda_handler(_event, _context):
+    """RSSフィードを取得し、Slackに通知を送信するLambda関数"""
     # 環境変数から設定を読み込む
     feed_url = os.environ.get("RSS_FEED_URL")
 
@@ -79,8 +80,19 @@ def lambda_handler(_event, _context):
 
 
 def set_last_run_time(
-    s3_client: boto3.Session, bucket_name: str, object_key: str, current_time: datetime
+    s3_client: boto3.Session,
+    bucket_name: str,
+    object_key: str,
+    current_time: datetime,
 ):
+    """最終実行日時をS3バケットに保存する
+
+    Args:
+        s3_client (boto3.Session): S3クライアント
+        bucket_name (str): S3のバケット名
+        object_key (str): S3のオブジェクトキー
+        current_time (datetime): 実行日時
+    """
     s3_client.put_object(
         Bucket=bucket_name,
         Key=object_key,
@@ -112,10 +124,12 @@ def get_last_run_time(
 
 
 def fetch_feed(feed_url: str):
+    """RSSフィードを取得するヘルパー関数"""
     return feedparser.parse(feed_url)
 
 
 def filter_feed_entry(feed, last_run_time: datetime):
+    """最終実行時間以降の記事をフィルタリングするヘルパー関数"""
     # 各記事のタイトルとリンクを出力
     for entry in reversed(feed.entries):
         # RSSフィードの登録日時をdatetimeオブジェクトに変換
@@ -126,7 +140,7 @@ def filter_feed_entry(feed, last_run_time: datetime):
             return entry
 
 
-def extract_content_from_html(html):
+def extract_content_from_html(html) -> str:
     """URLからコンテンツとタイトルを抽出するヘルパー関数"""
     extractor = ExtractContent()
     opt = {"threshold": 0}
@@ -144,7 +158,7 @@ def extract_ogp_image(soup):
     return None
 
 
-def summarize_text(title, text):
+def summarize_text(title: str, text: str) -> str:
     """テキストを要約する関数"""
     client = OpenAI()
     for _ in range(MAX_RETRIES):
@@ -174,7 +188,16 @@ def summarize_text(title, text):
     return response.choices[0].message.content
 
 
-def simple_post_to_slack(webhook_url, text):
+def simple_post_to_slack(webhook_url: str, text: str) -> requests.Response:
+    """Slackに簡易なテキストを投稿する関数
+
+    Args:
+        webhook_url (str): SlackのWebhook URL
+        text (str): Url
+
+    Returns:
+        requests.Response: Slackへのリクエストのレスポンス
+    """
     payload = {
         "unfurl_links": True,
         "blocks": [
@@ -195,8 +218,27 @@ def simple_post_to_slack(webhook_url, text):
     return response
 
 
-# Slackにメッセージを投稿する関数
-def post_to_slack(webhook_url, entry_url, title, summary, comment, img_url):
+def post_to_slack(
+    webhook_url: str,
+    entry_url: str,
+    title: str,
+    summary: str,
+    comment: str,
+    img_url: str,
+) -> requests.Response:
+    """Slackにメッセージを投稿する関数
+
+    Args:
+        webhook_url (str): SlackのWebhook URL
+        entry_url (str): 記事のURL
+        title (str): 記事のタイトル
+        summary (str): 記事の要約
+        comment (str): 記事へのコメント
+        img_url (str): 記事の画像
+
+    Returns:
+        requests.Response: Slackへのリクエストのレスポンス
+    """
     payload = {
         "attachments": [
             {
@@ -224,6 +266,7 @@ def post_to_slack(webhook_url, entry_url, title, summary, comment, img_url):
 
 
 def extract_text_from_pdf(binary):
+    """PDFファイルからテキストを抽出する"""
     with TemporaryFile(buffering=0) as f:
         f.write(binary)
         f.seek(0)
