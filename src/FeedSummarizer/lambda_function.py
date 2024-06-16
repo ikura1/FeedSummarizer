@@ -297,7 +297,10 @@ def get_llm_friendly_text(url: str) -> str:
     Returns:
         str: URLから取得したテキスト
     """
-    res = requests.get(f"https://r.jina.ai/{url}", timeout=REQUEST_TIMEOUT)
+    try:
+        res = requests.get(f"https://r.jina.ai/{url}", timeout=REQUEST_TIMEOUT)
+    except requests.exceptions.Timeout:
+        return None
     if res.status_code != 200:
         return None
     return res.text
