@@ -15,7 +15,7 @@ from pypdf import PdfReader
 BUCKET_NAME = "feedsummarizer"
 OBJECT_KEY = "last_run_time.json"
 REGION = "us-east-1"
-REQUEST_TIMEOUT = 90
+REQUEST_TIMEOUT = 5
 SLACK_WEBHOOK_URL = os.environ.get("SLACK_WEBHOOK_URL")
 MAX_TOKEN_LENGTH = 15000
 MAX_RETRIES = 3
