@@ -50,25 +50,16 @@ def lambda_handler(_event, _context):
     if any([entry.link.startswith(domain) for domain in SKIP_DOMAINS]):
         simple_post_to_slack(SLACK_WEBHOOK_URL, entry.link)
     else:
-        res = requests.get(entry.link, timeout=REQUEST_TIMEOUT)
-        img_url = None
-
-        if res.headers["Content-Type"] == "application/pdf":
-            entry_text = extract_text_from_pdf(res.content)
-        else:
-            soup = BeautifulSoup(res.text, "html.parser")
-            img_url = extract_ogp_image(soup)
-            entry_text = get_content_text(entry.link, res.text)
-        summary = summarize_text(entry.title, entry_text)
+        summary = summarize_from_url(entry.title, entry.link)
 
         # Slackに通知を送信
         post_to_slack(
             SLACK_WEBHOOK_URL,
             entry.link,
             entry.title,
-            summary,
+            summary.get("text"),
             entry.description,
-            img_url,
+            summary.get("img_url"),
         )
 
     # 最後に共有した日時を実行時間としてS3に保存
@@ -77,6 +68,20 @@ def lambda_handler(_event, _context):
 
     # 処理結果を返す
     return {"statusCode": 200, "body": "Processed 1 entries."}
+
+
+def summarize_from_url(title: str, url: str):
+    """urlを要約"""
+    res = requests.get(url, timeout=REQUEST_TIMEOUT)
+    img_url = None
+
+    if res.headers["Content-Type"] == "application/pdf":
+        entry_text = extract_text_from_pdf(res.content)
+    else:
+        soup = BeautifulSoup(res.text, "html.parser")
+        img_url = extract_ogp_image(soup)
+        entry_text = get_content_text(url, res.text)
+    return {"text": summarize_text(title, entry_text), "image": img_url}
 
 
 def set_last_run_time(
