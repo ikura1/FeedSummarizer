@@ -1,7 +1,7 @@
 import json
 import os
 from datetime import datetime, timezone
-from tempfile import TemporaryFile
+from tempfile import NamedTemporaryFile, TemporaryFile
 
 import boto3
 import feedparser
@@ -77,10 +77,12 @@ def summarize_from_url(title: str, url: str):
     img_url = None
 
     if res.headers["Content-Type"] == "application/pdf":
-        file_path = "download.pdf"
-        with open(file_path, "wb") as f:
-            f.write(res.content)
-        entry_text = extract_text_from_pdf(file_path)
+        with NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
+            file_path = tmp_file.name
+            with open(file_path, "wb") as f:
+                f.write(res.content)
+            entry_text = extract_text_from_pdf(file_path)
+
     else:
         soup = BeautifulSoup(res.text, "html.parser")
         img_url = extract_ogp_image(soup)
