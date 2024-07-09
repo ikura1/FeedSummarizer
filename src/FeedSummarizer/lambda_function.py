@@ -6,6 +6,7 @@ from tempfile import TemporaryFile
 import boto3
 import feedparser
 import openai
+import pymupdf
 import requests
 from bs4 import BeautifulSoup
 from extractcontent3 import ExtractContent
@@ -76,7 +77,10 @@ def summarize_from_url(title: str, url: str):
     img_url = None
 
     if res.headers["Content-Type"] == "application/pdf":
-        entry_text = extract_text_from_pdf(res.content)
+        file_path = "download.pdf"
+        with open(file_path, "wb") as f:
+            f.write(res.content)
+        entry_text = extract_text_from_pdf(file_path)
     else:
         soup = BeautifulSoup(res.text, "html.parser")
         img_url = extract_ogp_image(soup)
@@ -279,7 +283,17 @@ def post_to_slack(
     return response
 
 
-def extract_text_from_pdf(binary):
+def extract_text_from_pdf(file_path: str):
+    """PDFファイルからテキストを抽出する"""
+
+    doc = pymupdf.open(file_path)
+    text = ""
+    for page in doc:
+        text += page.get_text()
+    return text
+
+
+def extract_text_from_pypdf(binary):
     """PDFファイルからテキストを抽出する"""
     with TemporaryFile(buffering=0) as f:
         f.write(binary)
