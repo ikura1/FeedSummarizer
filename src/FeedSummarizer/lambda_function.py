@@ -76,7 +76,7 @@ def summarize_from_url(title: str, url: str):
     res = requests.get(url, timeout=REQUEST_TIMEOUT)
     img_url = None
 
-    if res.headers["Content-Type"] == "application/pdf":
+    if res.headers.get("Content-Type") == "application/pdf":
         with NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
             file_path = tmp_file.name
             with open(file_path, "wb") as f:
