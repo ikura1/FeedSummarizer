@@ -27,7 +27,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip > /dev/null 2>&1
           mkdir python
-          pip install --target=python -r requirements.lock > /dev/null 2>&1
+          pip install --target=python -r requirements.txt > /dev/null 2>&1
           zip -r dependencies.zip ./python > /dev/null 2>&1
 
       - name: publish dependencies
