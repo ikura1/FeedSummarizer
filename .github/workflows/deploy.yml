@@ -40,7 +40,7 @@ jobs:
 
       - name: publish dependencies
         run: |
-          result=$(aws lambda publish-layer-version --layer-name lambda-feedsumarizer --compatibleruntimes python3.12 --zip-file fileb://dependencies.zip)
+          result=$(aws lambda publish-layer-version --layer-name lambda-feedsumarizer --compatible-runtimes python3.12 --zip-file fileb://dependencies.zip)
           LAYER_VERSION_ARN=$(jq -r '.LayerVersionArn' <<< "$result")
           echo "LAYER_VERSION_ARN=$LAYER_VERSION_ARN" >> $GITHUB_ENV
 
