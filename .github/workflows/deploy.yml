@@ -28,7 +28,7 @@ jobs:
 
       - name: Export pinned requirements
         run: |
-          uv export --format requirements-txt -o /tmp/requirements.txt
+          uv export --format requirements-txt -o /tmp/requirements.txt --no-dev
 
       - name: install dependencies
         run: |
