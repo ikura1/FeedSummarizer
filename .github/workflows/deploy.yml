@@ -34,29 +34,9 @@ jobs:
         run: |
           mkdir build
           uv pip install -r /tmp/requirements.txt --target=build
-          zip -r ./dependencies.zip ./build
-
-      - name: publish dependencies
-        run: |
-          result=$(aws lambda publish-layer-version --layer-name lambda-feedsumarizer --zip-file fileb://dependencies.zip)
-          LAYER_VERSION_ARN=$(jq -r '.LayerVersionArn' <<< "$result")
-          echo "LAYER_VERSION_ARN=$LAYER_VERSION_ARN" >> $GITHUB_ENV
-          rm -rf build
-          rm dependencies.zip
-
-      - name: create deployment package
-        run: |
-          echo $LAYER_VERSION_ARN
-          cd src/FeedSummarizer
-          zip ../../code.zip *.py
-          cd ../../
+          cp src/FeedSummarizer/lambda_function.py build/
+          zip -r ./lambda.zip ./build
 
       - name: lambda update
         run: |
-          aws lambda update-function-code --function-name FeedSummarizer --zip-file fileb://code.zip --region "us-east-1" > /dev/null 2>&1
-
-      - name: lambda update layer
-        run: |
-          echo $LAYER_VERSION_ARN
-          aws lambda wait function-updated --function-name FeedSummarizer --region "us-east-1" > /dev/null 2>&1
-          aws lambda update-function-configuration --function-name FeedSummarizer --layers $LAYER_VERSION_ARN --region "us-east-1" > /dev/null 2>&1
+          aws lambda update-function-code --function-name FeedSummarizer --zip-file fileb://lambda.zip --region "us-east-1" > /dev/null 2>&1
