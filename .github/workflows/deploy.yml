@@ -32,7 +32,7 @@ jobs:
 
       - name: install dependencies
         run: |
-          mkdir -p build
+          mkdir build
           uv pip install -r requirements.txt --target=build  > /dev/null 2>&1
           zip -r dependencies.zip ./build > /dev/null 2>&1
 
