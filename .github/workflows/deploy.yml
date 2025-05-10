@@ -33,7 +33,7 @@ jobs:
       - name: install dependencies
         run: |
           mkdir build
-          uv pip install -r requirements.txt --target=build
+          uv pip install -r /tmp/requirements.txt --target=build
           cd build && zip -r ../dependencies.zip .
 
       - name: publish dependencies
