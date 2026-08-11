@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Instagram 片思いフォロー チェッカー</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #f7f7f9;
+    --card-bg: #ffffff;
+    --text: #1c1c1e;
+    --muted: #6b6b73;
+    --border: #e0e0e5;
+    --accent: #d6336c;
+    --accent-hover: #b02a5b;
+    --danger-bg: #fdecec;
+    --danger-text: #a30f0f;
+    --success-bg: #eafaf1;
+    --success-text: #1b7a43;
+    --code-bg: #f0f0f3;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #121214;
+      --card-bg: #1c1c1f;
+      --text: #f0f0f2;
+      --muted: #a0a0a8;
+      --border: #303035;
+      --accent: #ff5c8a;
+      --accent-hover: #ff7ba1;
+      --danger-bg: #3a1a1a;
+      --danger-text: #ff8a8a;
+      --success-bg: #16301f;
+      --success-text: #7fe0a5;
+      --code-bg: #232326;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic UI", "Segoe UI", Roboto, sans-serif;
+    line-height: 1.6;
+  }
+  .wrap {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 24px 16px 64px;
+  }
+  h1 {
+    font-size: 1.5rem;
+    margin-bottom: 4px;
+  }
+  .subtitle {
+    color: var(--muted);
+    margin-top: 0;
+    margin-bottom: 24px;
+    font-size: 0.95rem;
+  }
+  .card {
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 20px;
+  }
+  .card h2 {
+    font-size: 1.05rem;
+    margin-top: 0;
+  }
+  ol, ul {
+    padding-left: 1.3em;
+  }
+  li {
+    margin-bottom: 6px;
+  }
+  code {
+    background: var(--code-bg);
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: 0.9em;
+    word-break: break-all;
+  }
+  label {
+    display: block;
+    font-weight: 600;
+    margin-bottom: 6px;
+    font-size: 0.9rem;
+  }
+  .field {
+    margin-bottom: 16px;
+  }
+  input[type="file"] {
+    width: 100%;
+    padding: 8px;
+    border: 1px dashed var(--border);
+    border-radius: 8px;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 0.9rem;
+  }
+  button {
+    appearance: none;
+    border: none;
+    background: var(--accent);
+    color: #fff;
+    padding: 12px 20px;
+    border-radius: 8px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    width: 100%;
+  }
+  button:hover { background: var(--accent-hover); }
+  button:disabled {
+    background: var(--border);
+    color: var(--muted);
+    cursor: not-allowed;
+  }
+  button.secondary {
+    background: transparent;
+    color: var(--accent);
+    border: 1px solid var(--accent);
+    width: auto;
+    padding: 8px 14px;
+    font-size: 0.9rem;
+  }
+  button.secondary:hover { background: var(--danger-bg); }
+  .msg {
+    padding: 12px 14px;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    margin-top: 14px;
+  }
+  .msg.error { background: var(--danger-bg); color: var(--danger-text); }
+  .msg.success { background: var(--success-bg); color: var(--success-text); }
+  .result-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+  .count {
+    font-weight: 700;
+    font-size: 1.1rem;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.92rem;
+  }
+  th, td {
+    text-align: left;
+    padding: 8px 6px;
+    border-bottom: 1px solid var(--border);
+  }
+  th { color: var(--muted); font-weight: 600; }
+  td a {
+    color: var(--accent);
+    text-decoration: none;
+    word-break: break-all;
+  }
+  td a:hover { text-decoration: underline; }
+  .privacy {
+    font-size: 0.85rem;
+    color: var(--muted);
+  }
+  footer {
+    text-align: center;
+    color: var(--muted);
+    font-size: 0.8rem;
+    margin-top: 32px;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Instagram 片思いフォロー チェッカー</h1>
+  <p class="subtitle">自分はフォローしているのに、相手からはフォローされていないアカウント(片思いフォロー)を一覧表示します。すべてブラウザ内で処理され、外部には一切送信されません。</p>
+
+  <div class="card">
+    <h2>1. Instagramからデータをエクスポートする</h2>
+    <ol>
+      <li>Instagramアプリ(またはWeb)で「設定とプライバシー」→「アカウントセンター」→「自分の情報とアクセス許可」→「情報をダウンロード」を開く</li>
+      <li>対象アカウントを選び、「一部の情報をダウンロード」から「つながり」(フォロワー・フォロー中)を選択</li>
+      <li>形式は必ず <strong>JSON</strong> を選択してリクエスト</li>
+      <li>準備が完了したらメールまたはアプリの通知からダウンロードし、ZIPを解凍する</li>
+      <li>解凍後の <code>connections/followers_and_following/</code> フォルダ内にある <code>followers_1.json</code> と <code>following.json</code>(バージョンによっては <code>relationships_following.json</code>)を用意する</li>
+    </ol>
+  </div>
+
+  <div class="card">
+    <h2>2. ファイルをアップロードして比較</h2>
+    <div class="field">
+      <label for="followersFile">フォロワー一覧ファイル(followers_1.json)</label>
+      <input type="file" id="followersFile" accept="application/json,.json">
+    </div>
+    <div class="field">
+      <label for="followingFile">フォロー中一覧ファイル(following.json / relationships_following.json)</label>
+      <input type="file" id="followingFile" accept="application/json,.json">
+    </div>
+    <button id="compareBtn">比較する</button>
+    <div id="message"></div>
+  </div>
+
+  <div class="card" id="resultCard" style="display:none;">
+    <div class="result-header">
+      <div class="count" id="resultCount"></div>
+      <button class="secondary" id="copyBtn">一覧をコピー</button>
+    </div>
+    <div style="overflow-x:auto;">
+      <table id="resultTable">
+        <thead>
+          <tr><th>ユーザー名</th><th>プロフィールURL</th></tr>
+        </thead>
+        <tbody id="resultBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <p class="privacy">※ アップロードしたファイルはこのブラウザ内のみで処理され、どこにも送信・保存されません。ページを閉じればデータは破棄されます。</p>
+
+  <footer>Instagram 片思いフォロー チェッカー</footer>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  var followersInput = document.getElementById("followersFile");
+  var followingInput = document.getElementById("followingFile");
+  var compareBtn = document.getElementById("compareBtn");
+  var messageEl = document.getElementById("message");
+  var resultCard = document.getElementById("resultCard");
+  var resultCount = document.getElementById("resultCount");
+  var resultBody = document.getElementById("resultBody");
+  var copyBtn = document.getElementById("copyBtn");
+
+  var lastResults = [];
+
+  function showMessage(text, type) {
+    messageEl.innerHTML = "";
+    if (!text) return;
+    var div = document.createElement("div");
+    div.className = "msg " + (type || "error");
+    div.textContent = text;
+    messageEl.appendChild(div);
+  }
+
+  function readFileAsText(file) {
+    return new Promise(function (resolve, reject) {
+      var reader = new FileReader();
+      reader.onload = function () { resolve(reader.result); };
+      reader.onerror = function () { reject(new Error("ファイルの読み込みに失敗しました")); };
+      reader.readAsText(file);
+    });
+  }
+
+  // Instagramのエクスポート形式はバージョンによって配列直下、または
+  // { "relationships_following": [...] } のようなラップ済みオブジェクトの場合がある。
+  function extractEntries(parsed) {
+    if (Array.isArray(parsed)) return parsed;
+    if (parsed && typeof parsed === "object") {
+      for (var key in parsed) {
+        if (Object.prototype.hasOwnProperty.call(parsed, key) && Array.isArray(parsed[key])) {
+          return parsed[key];
+        }
+      }
+    }
+    return null;
+  }
+
+  function entriesToUserMap(entries) {
+    var map = new Map();
+    entries.forEach(function (entry) {
+      var listData = entry && entry.string_list_data;
+      if (!Array.isArray(listData) || listData.length === 0) return;
+      var item = listData[0];
+      var username = item && item.value;
+      if (!username) return;
+      var href = item.href || ("https://www.instagram.com/" + username + "/");
+      map.set(username, href);
+    });
+    return map;
+  }
+
+  function parseExportFile(text, label) {
+    var parsed;
+    try {
+      parsed = JSON.parse(text);
+    } catch (e) {
+      throw new Error(label + " が正しいJSON形式ではありません");
+    }
+    var entries = extractEntries(parsed);
+    if (!entries) {
+      throw new Error(label + " の形式を認識できませんでした。Instagramの公式エクスポートファイルか確認してください");
+    }
+    return entriesToUserMap(entries);
+  }
+
+  function renderResults(oneSided) {
+    resultBody.innerHTML = "";
+    lastResults = oneSided;
+
+    if (oneSided.length === 0) {
+      resultCount.textContent = "片思いフォローは見つかりませんでした 🎉";
+    } else {
+      resultCount.textContent = "片思いフォロー: " + oneSided.length + " 件";
+    }
+
+    oneSided.forEach(function (item) {
+      var tr = document.createElement("tr");
+
+      var nameTd = document.createElement("td");
+      nameTd.textContent = item.username;
+      tr.appendChild(nameTd);
+
+      var urlTd = document.createElement("td");
+      var a = document.createElement("a");
+      a.href = item.url;
+      a.textContent = item.url;
+      a.target = "_blank";
+      a.rel = "noopener noreferrer";
+      urlTd.appendChild(a);
+      tr.appendChild(urlTd);
+
+      resultBody.appendChild(tr);
+    });
+
+    resultCard.style.display = "block";
+  }
+
+  compareBtn.addEventListener("click", function () {
+    showMessage("");
+    resultCard.style.display = "none";
+
+    var followersFile = followersInput.files[0];
+    var followingFile = followingInput.files[0];
+
+    if (!followersFile || !followingFile) {
+      showMessage("フォロワー一覧とフォロー中一覧の両方のファイルを選択してください");
+      return;
+    }
+
+    compareBtn.disabled = true;
+    compareBtn.textContent = "比較中...";
+
+    Promise.all([readFileAsText(followersFile), readFileAsText(followingFile)])
+      .then(function (results) {
+        var followersMap = parseExportFile(results[0], "フォロワー一覧ファイル");
+        var followingMap = parseExportFile(results[1], "フォロー中一覧ファイル");
+
+        var oneSided = [];
+        followingMap.forEach(function (url, username) {
+          if (!followersMap.has(username)) {
+            oneSided.push({ username: username, url: url });
+          }
+        });
+        oneSided.sort(function (a, b) { return a.username.localeCompare(b.username); });
+
+        renderResults(oneSided);
+        showMessage("比較が完了しました", "success");
+      })
+      .catch(function (err) {
+        showMessage(err.message || "エラーが発生しました");
+      })
+      .finally(function () {
+        compareBtn.disabled = false;
+        compareBtn.textContent = "比較する";
+      });
+  });
+
+  copyBtn.addEventListener("click", function () {
+    if (lastResults.length === 0) return;
+    var text = lastResults.map(function (item) {
+      return item.username + "\t" + item.url;
+    }).join("\n");
+
+    navigator.clipboard.writeText(text).then(function () {
+      showMessage("クリップボードにコピーしました", "success");
+    }).catch(function () {
+      showMessage("コピーに失敗しました");
+    });
+  });
+})();
+</script>
+</body>
+</html>
