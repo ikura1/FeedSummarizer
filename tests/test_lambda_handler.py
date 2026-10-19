@@ -3,6 +3,7 @@ import json
 import boto3
 import feedparser
 import pytest
+import requests
 import responses
 from moto import mock_aws
 
@@ -68,7 +69,7 @@ def test_lambda_handler_does_not_advance_when_slack_fails(
     )
     responses.add(responses.POST, WEBHOOK_URL, status=500)
 
-    with pytest.raises(Exception):
+    with pytest.raises(requests.HTTPError):
         lambda_function.lambda_handler(None, None)
 
     # Slackへの投稿に失敗した場合は次回再送するため実行時間を進めない

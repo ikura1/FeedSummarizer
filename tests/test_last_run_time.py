@@ -1,5 +1,5 @@
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import boto3
 import pytest
@@ -34,7 +34,7 @@ def test_get_last_run_time_exists(s3_client):
 
     # 関数をテスト
     result = get_last_run_time(s3_client, "exists-object", OBJECT_KEY)
-    expected = datetime(2021, 9, 1, tzinfo=timezone.utc)
+    expected = datetime(2021, 9, 1, tzinfo=UTC)
     assert result == expected
 
 
@@ -42,7 +42,7 @@ def test_get_last_run_time_not_exists(s3_client):
     s3_client.create_bucket(Bucket="not-exists-object")
     # ファイルが存在しない場合のテスト
     result = get_last_run_time(s3_client, "not-exists-object", OBJECT_KEY)
-    assert result == datetime.min.replace(tzinfo=timezone.utc)
+    assert result == datetime.min.replace(tzinfo=UTC)
 
 
 def test_set_last_run_time_exists(s3_client):
@@ -53,7 +53,7 @@ def test_set_last_run_time_exists(s3_client):
         Bucket="bucket-set",
     )
     # バケットとオブジェクトをセットアップ
-    current_time_ = datetime.now(timezone.utc)
+    current_time_ = datetime.now(UTC)
 
     set_last_run_time(s3_client, "bucket-set", OBJECT_KEY, current_time_)
 

@@ -7,16 +7,18 @@ on:
       - completed
 jobs:
   build-deploy:
+    # Lint が失敗した場合はデプロイしない
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     permissions:
       id-token: write
       contents: read
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
-          python-version: 3.12
-      - uses: aws-actions/configure-aws-credentials@v2
+          python-version: "3.12"
+      - uses: aws-actions/configure-aws-credentials@v6
         with:
           aws-region: ${{ secrets.AWS_REGION}}
           role-to-assume: ${{secrets.AWS_ROLE_ARN}}
@@ -26,11 +28,13 @@ jobs:
         run: aws sts get-caller-identity
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v5
+        uses: astral-sh/setup-uv@v10
 
       - name: Export pinned requirements
         run: |
-          uv export --format requirements-txt -o /tmp/requirements.txt --no-dev
+          # boto3 系は Lambda ランタイムに同梱されているためレイヤーに含めない
+          uv export --format requirements-txt -o /tmp/requirements.txt --no-dev \
+            --no-emit-package boto3 --no-emit-package botocore --no-emit-package s3transfer
 
       - name: install dependencies
         run: |

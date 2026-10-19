@@ -1,6 +1,6 @@
 import json
 import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from tempfile import NamedTemporaryFile
 from typing import Any
 
@@ -47,7 +47,7 @@ def lambda_handler(_event, _context):
         return {"statusCode": 200, "body": "No new entries."}
 
     # AWSからでは、HTMLを取得できないドメインはUrlのみを投稿
-    if any([entry.link.startswith(domain) for domain in SKIP_DOMAINS]):
+    if any(entry.link.startswith(domain) for domain in SKIP_DOMAINS):
         simple_post_to_slack(SLACK_WEBHOOK_URL, entry.link).raise_for_status()
     else:
         try:
@@ -62,7 +62,7 @@ def lambda_handler(_event, _context):
                 entry.get("description", ""),
                 summary.get("img_url"),
             ).raise_for_status()
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             # 要約に失敗した記事で処理が止まり続けないよう、URLのみを投稿して先へ進める
             print(f"Failed to summarize {entry.link}: {e!r}")
             simple_post_to_slack(SLACK_WEBHOOK_URL, entry.link).raise_for_status()
@@ -134,7 +134,7 @@ def get_last_run_time(s3_client: Any, bucket_name: str, object_key: str) -> date
         ]
         return datetime.fromisoformat(last_run_time)
     except s3_client.exceptions.NoSuchKey:
-        return datetime.min.replace(tzinfo=timezone.utc)
+        return datetime.min.replace(tzinfo=UTC)
 
 
 def fetch_feed(feed_url: str):

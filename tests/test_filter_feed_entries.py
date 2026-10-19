@@ -10,24 +10,18 @@ from FeedSummarizer.lambda_function import filter_feed_entry
 @pytest.fixture
 def mock_feed():
     return SimpleNamespace(
-        **{
-            "entries": [
-                SimpleNamespace(
-                    **{
-                        "title": "Old Article",
-                        "link": "https://example.com/old",
-                        "date": "2021-09-01T10:00:00Z",
-                    }
-                ),
-                SimpleNamespace(
-                    **{
-                        "title": "New Article",
-                        "link": "https://example.com/new",
-                        "date": "2021-09-15T12:00:00Z",
-                    }
-                ),
-            ]
-        }
+        entries=[
+            SimpleNamespace(
+                title="Old Article",
+                link="https://example.com/old",
+                date="2021-09-01T10:00:00Z",
+            ),
+            SimpleNamespace(
+                title="New Article",
+                link="https://example.com/new",
+                date="2021-09-15T12:00:00Z",
+            ),
+        ]
     )
 
 
