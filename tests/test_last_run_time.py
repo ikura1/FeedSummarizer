@@ -13,11 +13,11 @@ from FeedSummarizer.lambda_function import (
 )
 
 
-@mock_aws
 @pytest.fixture
 def s3_client():
-    s3 = boto3.client("s3", region_name=REGION)
-    yield s3
+    with mock_aws():
+        s3 = boto3.client("s3", region_name=REGION)
+        yield s3
 
 
 def test_get_last_run_time_exists(s3_client):

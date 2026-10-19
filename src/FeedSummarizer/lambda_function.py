@@ -1,7 +1,8 @@
 import json
 import os
 from datetime import datetime, timezone
-from tempfile import NamedTemporaryFile, TemporaryFile
+from tempfile import NamedTemporaryFile
+from typing import Any
 
 import boto3
 import feedparser
@@ -11,18 +12,16 @@ import requests
 from bs4 import BeautifulSoup
 from extractcontent3 import ExtractContent
 from openai import OpenAI
-from pypdf import PdfReader
 
 BUCKET_NAME = "feedsummarizer"
 OBJECT_KEY = "last_run_time.json"
 REGION = "us-east-1"
 REQUEST_TIMEOUT = 5
 SLACK_WEBHOOK_URL = os.environ.get("SLACK_WEBHOOK_URL")
+OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
 MAX_TOKEN_LENGTH = 15000
 MAX_RETRIES = 3
 DECREMENT_TOKEN = 1000
-
-s3 = boto3.client("s3")
 
 SKIP_DOMAINS = ["https://twitter.com", "https://x.com/"]
 
@@ -49,19 +48,24 @@ def lambda_handler(_event, _context):
 
     # AWSからでは、HTMLを取得できないドメインはUrlのみを投稿
     if any([entry.link.startswith(domain) for domain in SKIP_DOMAINS]):
-        simple_post_to_slack(SLACK_WEBHOOK_URL, entry.link)
+        simple_post_to_slack(SLACK_WEBHOOK_URL, entry.link).raise_for_status()
     else:
-        summary = summarize_from_url(entry.title, entry.link)
+        try:
+            summary = summarize_from_url(entry.title, entry.link)
 
-        # Slackに通知を送信
-        post_to_slack(
-            SLACK_WEBHOOK_URL,
-            entry.link,
-            entry.title,
-            summary.get("text"),
-            entry.description,
-            summary.get("img_url"),
-        )
+            # Slackに通知を送信
+            post_to_slack(
+                SLACK_WEBHOOK_URL,
+                entry.link,
+                entry.title,
+                summary.get("text"),
+                entry.get("description", ""),
+                summary.get("img_url"),
+            ).raise_for_status()
+        except Exception as e:
+            # 要約に失敗した記事で処理が止まり続けないよう、URLのみを投稿して先へ進める
+            print(f"Failed to summarize {entry.link}: {e!r}")
+            simple_post_to_slack(SLACK_WEBHOOK_URL, entry.link).raise_for_status()
 
     # 最後に共有した日時を実行時間としてS3に保存
     entry_time = datetime.fromisoformat(entry.date)
@@ -78,20 +82,21 @@ def summarize_from_url(title: str, url: str):
 
     if res.headers.get("Content-Type") == "application/pdf":
         with NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
+            tmp_file.write(res.content)
             file_path = tmp_file.name
-            with open(file_path, "wb") as f:
-                f.write(res.content)
+        try:
             entry_text = extract_text_from_pdf(file_path)
-
+        finally:
+            os.unlink(file_path)
     else:
         soup = BeautifulSoup(res.text, "html.parser")
         img_url = extract_ogp_image(soup)
         entry_text = get_content_text(url, res.text)
-    return {"text": summarize_text(title, entry_text), "image": img_url}
+    return {"text": summarize_text(title, entry_text), "img_url": img_url}
 
 
 def set_last_run_time(
-    s3_client: boto3.Session,
+    s3_client: Any,
     bucket_name: str,
     object_key: str,
     current_time: datetime,
@@ -111,9 +116,7 @@ def set_last_run_time(
     )
 
 
-def get_last_run_time(
-    s3_client: boto3.Session, bucket_name: str, object_key: str
-) -> datetime:
+def get_last_run_time(s3_client: Any, bucket_name: str, object_key: str) -> datetime:
     """S3バケットから前回の実行時間を取得する
 
     Args:
@@ -144,7 +147,11 @@ def filter_feed_entry(feed, last_run_time: datetime):
     # 各記事のタイトルとリンクを出力
     for entry in reversed(feed.entries):
         # RSSフィードの登録日時をdatetimeオブジェクトに変換
-        entry_date = datetime.fromisoformat(entry.date)
+        try:
+            entry_date = datetime.fromisoformat(entry.date)
+        except (AttributeError, ValueError) as e:
+            print(f"Skip entry with invalid date {entry.get('link')}: {e!r}")
+            continue
 
         # 最終実行時間と比較
         if entry_date > last_run_time:
@@ -172,20 +179,18 @@ def extract_content_from_html(html: str) -> str:
 
 def extract_ogp_image(soup):
     """OGP画像を抽出するヘルパー関数"""
-    og_image_elems = soup.select('[property="og:image"]')
-    for og_image_elem in og_image_elems:
-        return og_image_elem.get("content")
-    return None
+    elem = soup.select_one('[property="og:image"]')
+    return elem.get("content") if elem else None
 
 
 def summarize_text(title: str, text: str) -> str:
     """テキストを要約する関数"""
     client = OpenAI()
+    response = None
     for _ in range(MAX_RETRIES):
         try:
-            # OpenAI APIを使用してテキストの要約を実行
             response = client.chat.completions.create(
-                model="gpt-3.5-turbo",
+                model=OPENAI_MODEL,
                 messages=[
                     {"role": "system", "content": "You are a helpful assistant."},
                     {"role": "assistant", "content": f"【Title】{title}\n###\n{text}"},
@@ -199,11 +204,12 @@ def summarize_text(title: str, text: str) -> str:
                     },
                 ],
             )
+            break
         except openai.BadRequestError as e:
             print(e)
             text_length = min(len(text), MAX_TOKEN_LENGTH)
             text = text[: text_length - DECREMENT_TOKEN]
-    if len(response.choices) < 1:
+    if response is None or len(response.choices) < 1:
         return ""
     return response.choices[0].message.content
 
@@ -293,20 +299,6 @@ def extract_text_from_pdf(file_path: str):
     for page in doc:
         text += page.get_text()
     return text
-
-
-def extract_text_from_pypdf(binary):
-    """PDFファイルからテキストを抽出する"""
-    with TemporaryFile(buffering=0) as f:
-        f.write(binary)
-        f.seek(0)
-        pdf = PdfReader(f)
-        text = ""
-        page_length = len(pdf.pages)
-        for page_num in range(page_length):
-            page = pdf.pages[page_num]
-            text += page.extract_text()
-        return text
 
 
 def get_llm_friendly_text(url: str) -> str:
