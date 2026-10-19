@@ -17,7 +17,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
         with:
-          python-version: "3.12"
+          python-version: "3.13"
       - uses: aws-actions/configure-aws-credentials@v6
         with:
           aws-region: ${{ secrets.AWS_REGION}}
@@ -44,7 +44,7 @@ jobs:
 
       - name: publish dependencies
         run: |
-          result=$(aws lambda publish-layer-version --layer-name lambda-feedsumarizer --compatible-runtimes python3.12 --zip-file fileb://dependencies.zip)
+          result=$(aws lambda publish-layer-version --layer-name lambda-feedsumarizer --compatible-runtimes python3.13 --zip-file fileb://dependencies.zip)
           LAYER_VERSION_ARN=$(jq -r '.LayerVersionArn' <<< "$result")
           echo "LAYER_VERSION_ARN=$LAYER_VERSION_ARN" >> $GITHUB_ENV
 
@@ -63,4 +63,4 @@ jobs:
         run: |
           echo $LAYER_VERSION_ARN
           aws lambda wait function-updated --function-name FeedSummarizer --region "us-east-1" > /dev/null 2>&1
-          aws lambda update-function-configuration --function-name FeedSummarizer --layers $LAYER_VERSION_ARN --region "us-east-1" > /dev/null 2>&1
+          aws lambda update-function-configuration --function-name FeedSummarizer --runtime python3.13 --layers $LAYER_VERSION_ARN --region "us-east-1" > /dev/null 2>&1
