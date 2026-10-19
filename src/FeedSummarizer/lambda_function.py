@@ -19,11 +19,6 @@ REGION = "us-east-1"
 REQUEST_TIMEOUT = 5
 # Reader API はページの描画を待つため応答が遅い
 READER_TIMEOUT = 10
-# ブラウザ以外のアクセスを弾くサイトがあるためUAを指定する
-USER_AGENT = (
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-    "(KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
-)
 SLACK_WEBHOOK_URL = os.environ.get("SLACK_WEBHOOK_URL")
 OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
 MAX_TOKEN_LENGTH = 15000
@@ -83,22 +78,35 @@ def lambda_handler(_event, _context):
 
 
 def summarize_from_url(title: str, url: str):
-    """urlを要約"""
-    res = requests.get(url, headers={"User-Agent": USER_AGENT}, timeout=REQUEST_TIMEOUT)
-    # エラーページを要約しないよう、失敗時は例外にしてURLのみの投稿に回す
-    res.raise_for_status()
-    img_url = None
+    """urlを要約
 
+    Raises:
+        ValueError: 本文を取得できなかった場合
+    """
+    res = None
+    try:
+        res = requests.get(url, timeout=REQUEST_TIMEOUT)
+        res.raise_for_status()
+    except requests.exceptions.RequestException as e:
+        # AWS からの直接アクセスを弾くサイトでも Reader API なら取得できるため続行する
+        print(f"Failed to fetch {url}: {e!r}")
+        res = None
+
+    img_url = None
+    html = ""
     # "application/pdf; charset=..." のようにパラメータが付く場合がある
-    if res.headers.get("Content-Type", "").startswith("application/pdf"):
+    if res is not None and res.headers.get("Content-Type", "").startswith(
+        "application/pdf"
+    ):
         entry_text = extract_text_from_pdf(res.content)
     else:
-        # charset 指定がないと requests は ISO-8859-1 とみなし日本語が文字化けする
-        if res.encoding is None or res.encoding.lower() == "iso-8859-1":
-            res.encoding = res.apparent_encoding
-        soup = BeautifulSoup(res.text, "html.parser")
-        img_url = extract_ogp_image(soup, res.url)
-        entry_text = get_content_text(url, res.text)
+        if res is not None:
+            # charset 指定がないと requests は ISO-8859-1 とみなし日本語が文字化けする
+            if res.encoding is None or res.encoding.lower() == "iso-8859-1":
+                res.encoding = res.apparent_encoding
+            html = res.text
+            img_url = extract_ogp_image(BeautifulSoup(html, "html.parser"), res.url)
+        entry_text = get_content_text(url, html)
     return {"text": summarize_text(title, entry_text), "img_url": img_url}
 
 
@@ -171,6 +179,8 @@ def get_content_text(url: str, text: str) -> str:
     friendly_text = get_llm_friendly_text(url)
     if friendly_text:
         return friendly_text
+    if not text:
+        return ""
     return extract_content_from_html(text)
 
 
