@@ -1,6 +1,5 @@
 import pymupdf
 import pytest
-import requests
 import responses
 from bs4 import BeautifulSoup
 
@@ -30,12 +29,28 @@ def fake_summarize(monkeypatch):
 
 
 @responses.activate
-def test_summarize_from_url_raises_on_error_page(fake_summarize):
+def test_summarize_from_url_does_not_summarize_error_page(fake_summarize):
     responses.add(responses.GET, URL, status=404, body="Not Found")
 
-    with pytest.raises(requests.HTTPError):
-        summarize_from_url("title", URL)
-    assert "text" not in fake_summarize
+    # Reader API でも取れなければ、エラーページではなく空の本文で要約に回す
+    summarize_from_url("title", URL)
+    assert fake_summarize["text"] == ""
+
+
+@responses.activate
+def test_summarize_from_url_uses_reader_when_direct_fetch_blocked(
+    fake_summarize, monkeypatch
+):
+    # AWS からの直接アクセスが 403 でも Reader API の本文で要約する
+    responses.add(responses.GET, URL, status=403, body="Forbidden")
+    monkeypatch.setattr(
+        lambda_function, "get_llm_friendly_text", lambda _url: "reader text"
+    )
+
+    result = summarize_from_url("title", URL)
+
+    assert fake_summarize["text"] == "reader text"
+    assert result["img_url"] is None
 
 
 @responses.activate
