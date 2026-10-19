@@ -1,8 +1,8 @@
 import json
 import os
 from datetime import UTC, datetime
-from tempfile import NamedTemporaryFile
 from typing import Any
+from urllib.parse import urljoin
 
 import boto3
 import feedparser
@@ -17,6 +17,13 @@ BUCKET_NAME = "feedsummarizer"
 OBJECT_KEY = "last_run_time.json"
 REGION = "us-east-1"
 REQUEST_TIMEOUT = 5
+# Reader API はページの描画を待つため応答が遅い
+READER_TIMEOUT = 10
+# ブラウザ以外のアクセスを弾くサイトがあるためUAを指定する
+USER_AGENT = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
+)
 SLACK_WEBHOOK_URL = os.environ.get("SLACK_WEBHOOK_URL")
 OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
 MAX_TOKEN_LENGTH = 15000
@@ -77,20 +84,20 @@ def lambda_handler(_event, _context):
 
 def summarize_from_url(title: str, url: str):
     """urlを要約"""
-    res = requests.get(url, timeout=REQUEST_TIMEOUT)
+    res = requests.get(url, headers={"User-Agent": USER_AGENT}, timeout=REQUEST_TIMEOUT)
+    # エラーページを要約しないよう、失敗時は例外にしてURLのみの投稿に回す
+    res.raise_for_status()
     img_url = None
 
-    if res.headers.get("Content-Type") == "application/pdf":
-        with NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
-            tmp_file.write(res.content)
-            file_path = tmp_file.name
-        try:
-            entry_text = extract_text_from_pdf(file_path)
-        finally:
-            os.unlink(file_path)
+    # "application/pdf; charset=..." のようにパラメータが付く場合がある
+    if res.headers.get("Content-Type", "").startswith("application/pdf"):
+        entry_text = extract_text_from_pdf(res.content)
     else:
+        # charset 指定がないと requests は ISO-8859-1 とみなし日本語が文字化けする
+        if res.encoding is None or res.encoding.lower() == "iso-8859-1":
+            res.encoding = res.apparent_encoding
         soup = BeautifulSoup(res.text, "html.parser")
-        img_url = extract_ogp_image(soup)
+        img_url = extract_ogp_image(soup, res.url)
         entry_text = get_content_text(url, res.text)
     return {"text": summarize_text(title, entry_text), "img_url": img_url}
 
@@ -177,14 +184,25 @@ def extract_content_from_html(html: str) -> str:
     return text
 
 
-def extract_ogp_image(soup):
+def extract_ogp_image(soup, base_url: str = ""):
     """OGP画像を抽出するヘルパー関数"""
     elem = soup.select_one('[property="og:image"]')
-    return elem.get("content") if elem else None
+    if not elem or not elem.get("content"):
+        return None
+    # 相対パスで書かれている場合はSlackで表示できないため絶対URLにする
+    return urljoin(base_url, elem["content"])
 
 
 def summarize_text(title: str, text: str) -> str:
-    """テキストを要約する関数"""
+    """テキストを要約する関数
+
+    Raises:
+        ValueError: 本文が空、または要約を取得できなかった場合
+    """
+    if not text or not text.strip():
+        raise ValueError("No content to summarize")
+    # 長すぎる本文はトークンと料金を無駄にするため先に切り詰める
+    text = text[:MAX_TOKEN_LENGTH]
     client = OpenAI()
     response = None
     for _ in range(MAX_RETRIES):
@@ -192,26 +210,27 @@ def summarize_text(title: str, text: str) -> str:
             response = client.chat.completions.create(
                 model=OPENAI_MODEL,
                 messages=[
-                    {"role": "system", "content": "You are a helpful assistant."},
-                    {"role": "assistant", "content": f"【Title】{title}\n###\n{text}"},
                     {
-                        "role": "user",
-                        "content": """
-                        この記事の内容について、技術的な視点で要約をしてください。
-                        3点の箇条書きでお願いします。
-                        lang:ja
-                        """,
+                        "role": "system",
+                        "content": (
+                            "あなたは技術記事の要約者です。"
+                            "与えられた記事の内容を技術的な視点で、"
+                            "日本語の3点の箇条書きで要約してください。"
+                        ),
                     },
+                    {"role": "user", "content": f"【Title】{title}\n###\n{text}"},
                 ],
             )
             break
         except openai.BadRequestError as e:
             print(e)
-            text_length = min(len(text), MAX_TOKEN_LENGTH)
-            text = text[: text_length - DECREMENT_TOKEN]
+            text = text[: len(text) - DECREMENT_TOKEN]
     if response is None or len(response.choices) < 1:
-        return ""
-    return response.choices[0].message.content
+        raise ValueError("Failed to get summary from OpenAI")
+    content = response.choices[0].message.content
+    if not content:
+        raise ValueError("Empty summary from OpenAI")
+    return content
 
 
 def simple_post_to_slack(webhook_url: str, text: str) -> requests.Response:
@@ -291,14 +310,10 @@ def post_to_slack(
     return response
 
 
-def extract_text_from_pdf(file_path: str):
-    """PDFファイルからテキストを抽出する"""
-
-    doc = pymupdf.open(file_path)
-    text = ""
-    for page in doc:
-        text += page.get_text()
-    return text
+def extract_text_from_pdf(content: bytes) -> str:
+    """PDFのバイト列からテキストを抽出する"""
+    with pymupdf.open(stream=content, filetype="pdf") as doc:
+        return "".join(page.get_text() for page in doc)
 
 
 def get_llm_friendly_text(url: str) -> str:
@@ -311,8 +326,9 @@ def get_llm_friendly_text(url: str) -> str:
         str: URLから取得したテキスト
     """
     try:
-        res = requests.get(f"https://r.jina.ai/{url}", timeout=REQUEST_TIMEOUT)
-    except requests.exceptions.Timeout:
+        res = requests.get(f"https://r.jina.ai/{url}", timeout=READER_TIMEOUT)
+    except requests.exceptions.RequestException as e:
+        print(f"Reader API failed for {url}: {e!r}")
         return None
     if res.status_code != 200:
         return None
