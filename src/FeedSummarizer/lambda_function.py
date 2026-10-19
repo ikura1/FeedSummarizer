@@ -226,6 +226,8 @@ def summarize_text(title: str, text: str) -> str:
                             "あなたは技術記事の要約者です。"
                             "与えられた記事の内容を技術的な視点で、"
                             "日本語の3点の箇条書きで要約してください。"
+                            "Slack にそのまま表示するため、各行は「• 」で始め、"
+                            "見出しや太字などの Markdown 記法は使わないでください。"
                         ),
                     },
                     {"role": "user", "content": f"【Title】{title}\n###\n{text}"},
@@ -297,7 +299,7 @@ def post_to_slack(
     payload = {
         "attachments": [
             {
-                "mrkdwn_in": ["text"],
+                "mrkdwn_in": ["text", "fields"],
                 "color": "#36a64f",
                 "pretext": comment,
                 "title": title,
@@ -307,8 +309,7 @@ def post_to_slack(
                 "fields": [
                     {
                         "title": "要約",
-                        # summaryをコードブロックで囲む
-                        "value": f"```\n{summary}\n```",
+                        "value": summary,
                         "short": False,
                     },
                 ],
