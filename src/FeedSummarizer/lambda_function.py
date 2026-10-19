@@ -24,15 +24,11 @@ OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
 MAX_TOKEN_LENGTH = 15000
 MAX_RETRIES = 3
 DECREMENT_TOKEN = 1000
-# 1回の実行で投稿する記事の上限
-MAX_ENTRIES_PER_RUN = int(os.environ.get("MAX_ENTRIES_PER_RUN", "3"))
-# 1記事の処理にかかる時間の目安。残りがこれを下回ったら次回に回す
-MIN_REMAINING_MILLIS = 40_000
 
 SKIP_DOMAINS = ["https://twitter.com", "https://x.com/"]
 
 
-def lambda_handler(_event, context):
+def lambda_handler(_event, _context):
     """RSSフィードを取得し、Slackに通知を送信するLambda関数"""
     # 環境変数から設定を読み込む
     feed_url = os.environ.get("RSS_FEED_URL")
@@ -46,58 +42,39 @@ def lambda_handler(_event, context):
     # RSSフィードを読み込む
     feed = fetch_feed(feed_url)
 
-    processed = 0
-    while processed < MAX_ENTRIES_PER_RUN:
-        # Lambda のタイムアウトで途中終了しないよう、2件目以降は残り時間が少なければ次回に回す
-        if (
-            processed > 0
-            and context is not None
-            and context.get_remaining_time_in_millis() < MIN_REMAINING_MILLIS
-        ):
-            break
+    # 最終実行時間以降の記事をフィルタリング
+    entry = filter_feed_entry(feed, last_run_time)
 
-        # 最終実行時間以降の記事をフィルタリング
-        entry = filter_feed_entry(feed, last_run_time)
-        if entry is None:
-            break
-
-        post_entry(entry)
-
-        # 投稿のたびに日時を保存し、途中で失敗しても投稿済みの記事を再送しない
-        last_run_time = datetime.fromisoformat(entry.date)
-        set_last_run_time(s3_client, BUCKET_NAME, OBJECT_KEY, last_run_time)
-        processed += 1
-
-    if processed == 0:
+    if entry is None:
         return {"statusCode": 200, "body": "No new entries."}
 
-    # 処理結果を返す
-    return {"statusCode": 200, "body": f"Processed {processed} entries."}
-
-
-def post_entry(entry):
-    """記事を要約してSlackに投稿する"""
     # AWSからでは、HTMLを取得できないドメインはUrlのみを投稿
     if any(entry.link.startswith(domain) for domain in SKIP_DOMAINS):
         simple_post_to_slack(SLACK_WEBHOOK_URL, entry.link).raise_for_status()
-        return
+    else:
+        try:
+            summary = summarize_from_url(entry.title, entry.link)
 
-    try:
-        summary = summarize_from_url(entry.title, entry.link)
+            # Slackに通知を送信
+            post_to_slack(
+                SLACK_WEBHOOK_URL,
+                entry.link,
+                entry.title,
+                summary.get("text"),
+                entry.get("description", ""),
+                summary.get("img_url"),
+            ).raise_for_status()
+        except Exception as e:  # noqa: BLE001
+            # 要約に失敗した記事で処理が止まり続けないよう、URLのみを投稿して先へ進める
+            print(f"Failed to summarize {entry.link}: {e!r}")
+            simple_post_to_slack(SLACK_WEBHOOK_URL, entry.link).raise_for_status()
 
-        # Slackに通知を送信
-        post_to_slack(
-            SLACK_WEBHOOK_URL,
-            entry.link,
-            entry.title,
-            summary.get("text"),
-            entry.get("description", ""),
-            summary.get("img_url"),
-        ).raise_for_status()
-    except Exception as e:  # noqa: BLE001
-        # 要約に失敗した記事で処理が止まり続けないよう、URLのみを投稿して先へ進める
-        print(f"Failed to summarize {entry.link}: {e!r}")
-        simple_post_to_slack(SLACK_WEBHOOK_URL, entry.link).raise_for_status()
+    # 最後に共有した日時を実行時間としてS3に保存
+    entry_time = datetime.fromisoformat(entry.date)
+    set_last_run_time(s3_client, BUCKET_NAME, OBJECT_KEY, entry_time)
+
+    # 処理結果を返す
+    return {"statusCode": 200, "body": "Processed 1 entries."}
 
 
 def summarize_from_url(title: str, url: str):
