@@ -1,6 +1,6 @@
 # FeedSummarizer
 
-RSS フィード（はてなブックマークなど）の新着記事を OpenAI で要約し、Slack に投稿する AWS Lambda 関数です。
+RSS フィード（はてなブックマークなど）の新着記事を Claude（Anthropic）で要約し、Slack に投稿する AWS Lambda 関数です。
 
 ## 動作
 
@@ -19,10 +19,10 @@ RSS フィード（はてなブックマークなど）の新着記事を OpenAI
 
 | 名前 | 説明 |
 | --- | --- |
-| `OPENAI_API_KEY` | OpenAI の API キー |
+| `ANTHROPIC_API_KEY` | Claude API の API キー（[Claude Console](https://platform.claude.com/) で発行） |
 | `SLACK_WEBHOOK_URL` | 投稿先の Slack Incoming Webhook URL |
 | `RSS_FEED_URL` | 読み込む RSS フィードの URL |
-| `OPENAI_MODEL` | 要約に使うモデル（省略時は `gpt-4o-mini`） |
+| `CLAUDE_MODEL` | 要約に使うモデル（省略時は `claude-haiku-5-5`） |
 
 ## 開発
 

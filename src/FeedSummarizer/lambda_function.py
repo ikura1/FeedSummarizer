@@ -4,14 +4,13 @@ from datetime import UTC, datetime
 from typing import Any
 from urllib.parse import urljoin
 
+import anthropic
 import boto3
 import feedparser
-import openai
 import pymupdf
 import requests
 from bs4 import BeautifulSoup
 from extractcontent3 import ExtractContent
-from openai import OpenAI
 
 BUCKET_NAME = "feedsummarizer"
 OBJECT_KEY = "last_run_time.json"
@@ -20,10 +19,16 @@ REQUEST_TIMEOUT = 5
 # Reader API はページの描画を待つため応答が遅い
 READER_TIMEOUT = 10
 SLACK_WEBHOOK_URL = os.environ.get("SLACK_WEBHOOK_URL")
-OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
-MAX_TOKEN_LENGTH = 15000
-MAX_RETRIES = 3
-DECREMENT_TOKEN = 1000
+CLAUDE_MODEL = os.environ.get("CLAUDE_MODEL", "claude-haiku-5-5")
+# 料金が上がる 10 万トークンを超えないよう、本文はこの文字数までにする
+MAX_TEXT_LENGTH = 50000
+SYSTEM_PROMPT = (
+    "あなたは技術記事の要約者です。"
+    "与えられた記事の内容を技術的な視点で、日本語の3点の箇条書きで要約してください。"
+    "Slack にそのまま表示するため、各行は「• 」で始め、"
+    "見出しや太字などの Markdown 記法は使わないでください。"
+    "要約以外の前置きや締めの文は書かないでください。"
+)
 
 SKIP_DOMAINS = ["https://twitter.com", "https://x.com/"]
 # 同じURLの二重投稿を防ぐため、直近に投稿したURLを覚えておく件数
@@ -97,13 +102,14 @@ def lambda_handler(_event, _context):
 def summary_failed_note(error: Exception) -> str:
     """要約に失敗した理由を、Slack に添える一言にする
 
-    ログを見なくても原因が分かるよう、例外の種類と OpenAI のエラーコードを含める。
-    メッセージ本文は API キーの一部を含む場合があるため載せない。
+    ログを見なくても原因が分かるよう、例外の種類を含める。
+    Claude API のエラーは、エラーの種類とメッセージ（残高不足など）も含める。
     """
     reason = type(error).__name__
-    code = getattr(error, "code", None)
-    if code:
-        reason += f" / {code}"
+    if isinstance(error, anthropic.APIStatusError):
+        body = error.body if isinstance(error.body, dict) else {}
+        detail = body.get("error", {}).get("message", "")
+        reason += f" / {error.type or error.status_code}: {detail[:100]}"
     return f"（要約できませんでした: {reason}）"
 
 
@@ -252,41 +258,32 @@ def summarize_text(title: str, text: str) -> str:
 
     Raises:
         ValueError: 本文が空、または要約を取得できなかった場合
+        anthropic.APIError: Claude API の呼び出しに失敗した場合
     """
     if not text or not text.strip():
         raise ValueError("No content to summarize")
-    # 長すぎる本文はトークンと料金を無駄にするため先に切り詰める
-    text = text[:MAX_TOKEN_LENGTH]
-    client = OpenAI()
-    response = None
-    for _ in range(MAX_RETRIES):
-        try:
-            response = client.chat.completions.create(
-                model=OPENAI_MODEL,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": (
-                            "あなたは技術記事の要約者です。"
-                            "与えられた記事の内容を技術的な視点で、"
-                            "日本語の3点の箇条書きで要約してください。"
-                            "Slack にそのまま表示するため、各行は「• 」で始め、"
-                            "見出しや太字などの Markdown 記法は使わないでください。"
-                        ),
-                    },
-                    {"role": "user", "content": f"【Title】{title}\n###\n{text}"},
-                ],
-            )
-            break
-        except openai.BadRequestError as e:
-            print(e)
-            text = text[: len(text) - DECREMENT_TOKEN]
-    if response is None or len(response.choices) < 1:
-        raise ValueError("Failed to get summary from OpenAI")
-    content = response.choices[0].message.content
-    if not content:
-        raise ValueError("Empty summary from OpenAI")
-    return content
+    # Lambda のタイムアウトより先に打ち切り、URLのみの投稿に回せるようにする
+    client = anthropic.Anthropic(timeout=30.0, max_retries=1)
+    response = client.messages.create(
+        model=CLAUDE_MODEL,
+        max_tokens=4096,
+        system=SYSTEM_PROMPT,
+        # 3点の要約には深い思考は不要なため、速さと料金を優先する
+        output_config={"effort": "low"},
+        messages=[
+            {
+                "role": "user",
+                "content": f"【Title】{title}\n###\n{text[:MAX_TEXT_LENGTH]}",
+            }
+        ],
+    )
+    if response.stop_reason == "refusal":
+        category = response.stop_details.category if response.stop_details else None
+        raise ValueError(f"Refused by Claude: {category}")
+    summary = "".join(b.text for b in response.content if b.type == "text").strip()
+    if not summary:
+        raise ValueError(f"Empty summary from Claude: {response.stop_reason}")
+    return summary
 
 
 def simple_post_to_slack(
