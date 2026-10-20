@@ -28,7 +28,6 @@ DECREMENT_TOKEN = 1000
 SKIP_DOMAINS = ["https://twitter.com", "https://x.com/"]
 # 同じURLの二重投稿を防ぐため、直近に投稿したURLを覚えておく件数
 RECENT_URLS_LIMIT = 100
-SUMMARY_FAILED_NOTE = "（要約できませんでした）"
 
 
 def lambda_handler(_event, _context):
@@ -83,7 +82,7 @@ def lambda_handler(_event, _context):
             # 要約に失敗した記事で処理が止まり続けないよう、URLのみを投稿して先へ進める
             print(f"Failed to summarize {entry.link}: {e!r}")
             simple_post_to_slack(
-                SLACK_WEBHOOK_URL, entry.link, SUMMARY_FAILED_NOTE
+                SLACK_WEBHOOK_URL, entry.link, summary_failed_note(e)
             ).raise_for_status()
 
     # 最後に共有した日時を実行時間として、投稿したURLとともにS3に保存
@@ -93,6 +92,19 @@ def lambda_handler(_event, _context):
 
     # 処理結果を返す
     return {"statusCode": 200, "body": "Processed 1 entries."}
+
+
+def summary_failed_note(error: Exception) -> str:
+    """要約に失敗した理由を、Slack に添える一言にする
+
+    ログを見なくても原因が分かるよう、例外の種類と OpenAI のエラーコードを含める。
+    メッセージ本文は API キーの一部を含む場合があるため載せない。
+    """
+    reason = type(error).__name__
+    code = getattr(error, "code", None)
+    if code:
+        reason += f" / {code}"
+    return f"（要約できませんでした: {reason}）"
 
 
 def summarize_from_url(title: str, url: str):
