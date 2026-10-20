@@ -1,0 +1,24 @@
+version: 2
+updates:
+  # Python の依存パッケージ（uv.lock）
+  - package-ecosystem: "uv"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    groups:
+      # 更新はまとめて1つの PR にする
+      python:
+        patterns: ["*"]
+    ignore:
+      # 2.x は Lambda レイヤーの上限(250MB)を超えるため
+      - dependency-name: "pymupdf"
+        versions: [">=2"]
+
+  # GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    groups:
+      actions:
+        patterns: ["*"]

@@ -9,8 +9,9 @@ RSS フィード（はてなブックマークなど）の新着記事を OpenAI
 3. 記事本文を取得して要約し、Slack に投稿する
    - 本文は [Jina Reader](https://jina.ai/reader/) で取得し、失敗したら HTML から抽出する
    - PDF にも対応
-   - X (Twitter) の URL や、要約に失敗した記事は URL のみを投稿する
-4. 投稿した記事の日時を S3 に保存する
+   - X (Twitter) の URL や、要約に失敗した記事は URL のみを投稿する（失敗時は「要約できませんでした」と添える）
+   - 直近 100 件で投稿済みの URL は投稿しない
+4. 投稿した記事の日時と URL を S3 に保存する
 
 1 回の実行で 1 記事を処理します。
 
@@ -34,3 +35,5 @@ uv run pre-commit install  # コミット時に ruff / bandit を実行
 ## デプロイ
 
 `master` に push すると、Lint とテストが通ったあとに GitHub Actions が Lambda（`FeedSummarizer`、us-east-1、python3.13）を更新します。依存パッケージは Lambda レイヤー `lambda-feedsumarizer` として公開されます。
+
+依存パッケージと GitHub Actions は、Dependabot が毎月まとめて更新 PR を作ります。

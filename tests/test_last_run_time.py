@@ -62,3 +62,20 @@ def test_set_last_run_time_exists(s3_client):
 
     # 関数をテスト
     assert saved_time == current_time_.isoformat()
+
+
+def test_set_last_run_time_with_recent_urls(s3_client):
+    s3_client.create_bucket(Bucket="bucket-urls")
+    current_time_ = datetime(2021, 9, 1, tzinfo=UTC)
+
+    set_last_run_time(
+        s3_client, "bucket-urls", OBJECT_KEY, current_time_, ["https://example.com"]
+    )
+
+    response = s3_client.get_object(Bucket="bucket-urls", Key=OBJECT_KEY)
+    assert json.loads(response["Body"].read()) == {
+        "last_run_time": "2021-09-01T00:00:00+00:00",
+        "recent_urls": ["https://example.com"],
+    }
+    # 以前の形式と同じく日時を読める
+    assert get_last_run_time(s3_client, "bucket-urls", OBJECT_KEY) == current_time_
