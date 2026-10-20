@@ -26,6 +26,9 @@ MAX_RETRIES = 3
 DECREMENT_TOKEN = 1000
 
 SKIP_DOMAINS = ["https://twitter.com", "https://x.com/"]
+# 同じURLの二重投稿を防ぐため、直近に投稿したURLを覚えておく件数
+RECENT_URLS_LIMIT = 100
+SUMMARY_FAILED_NOTE = "（要約できませんでした）"
 
 
 def lambda_handler(_event, _context):
@@ -36,16 +39,28 @@ def lambda_handler(_event, _context):
     # S3 クライアントの初期化
     s3_client = boto3.client("s3")
 
-    # 最終実行時間を S3 から取得
-    last_run_time = get_last_run_time(s3_client, BUCKET_NAME, OBJECT_KEY)
+    # 最終実行時間と直近に投稿したURLを S3 から取得
+    state = load_state(s3_client, BUCKET_NAME, OBJECT_KEY)
+    last_run_time = parse_last_run_time(state)
+    recent_urls = state.get("recent_urls", [])
 
     # RSSフィードを読み込む
     feed = fetch_feed(feed_url)
 
-    # 最終実行時間以降の記事をフィルタリング
+    # 最終実行時間以降の記事をフィルタリング（投稿済みのURLは飛ばす）
+    skipped = False
     entry = filter_feed_entry(feed, last_run_time)
+    while entry is not None and entry.link in recent_urls:
+        print(f"Skip already posted {entry.link}")
+        skipped = True
+        last_run_time = datetime.fromisoformat(entry.date)
+        entry = filter_feed_entry(feed, last_run_time)
 
     if entry is None:
+        if skipped:
+            set_last_run_time(
+                s3_client, BUCKET_NAME, OBJECT_KEY, last_run_time, recent_urls
+            )
         return {"statusCode": 200, "body": "No new entries."}
 
     # AWSからでは、HTMLを取得できないドメインはUrlのみを投稿
@@ -67,11 +82,14 @@ def lambda_handler(_event, _context):
         except Exception as e:  # noqa: BLE001
             # 要約に失敗した記事で処理が止まり続けないよう、URLのみを投稿して先へ進める
             print(f"Failed to summarize {entry.link}: {e!r}")
-            simple_post_to_slack(SLACK_WEBHOOK_URL, entry.link).raise_for_status()
+            simple_post_to_slack(
+                SLACK_WEBHOOK_URL, entry.link, SUMMARY_FAILED_NOTE
+            ).raise_for_status()
 
-    # 最後に共有した日時を実行時間としてS3に保存
+    # 最後に共有した日時を実行時間として、投稿したURLとともにS3に保存
     entry_time = datetime.fromisoformat(entry.date)
-    set_last_run_time(s3_client, BUCKET_NAME, OBJECT_KEY, entry_time)
+    recent_urls = (recent_urls + [entry.link])[-RECENT_URLS_LIMIT:]
+    set_last_run_time(s3_client, BUCKET_NAME, OBJECT_KEY, entry_time, recent_urls)
 
     # 処理結果を返す
     return {"statusCode": 200, "body": "Processed 1 entries."}
@@ -115,6 +133,7 @@ def set_last_run_time(
     bucket_name: str,
     object_key: str,
     current_time: datetime,
+    recent_urls: list[str] | None = None,
 ):
     """最終実行日時をS3バケットに保存する
 
@@ -123,12 +142,32 @@ def set_last_run_time(
         bucket_name (str): S3のバケット名
         object_key (str): S3のオブジェクトキー
         current_time (datetime): 実行日時
+        recent_urls (list[str] | None): 直近に投稿したURL
     """
+    state = {"last_run_time": current_time.isoformat()}
+    if recent_urls is not None:
+        state["recent_urls"] = recent_urls
     s3_client.put_object(
         Bucket=bucket_name,
         Key=object_key,
-        Body=json.dumps({"last_run_time": current_time.isoformat()}),
+        Body=json.dumps(state),
     )
+
+
+def load_state(s3_client: Any, bucket_name: str, object_key: str) -> dict:
+    """S3バケットから前回の実行状態を取得する。存在しない場合は空の辞書を返す"""
+    try:
+        response = s3_client.get_object(Bucket=bucket_name, Key=object_key)
+    except s3_client.exceptions.NoSuchKey:
+        return {}
+    return json.loads(response["Body"].read().decode("utf-8"))
+
+
+def parse_last_run_time(state: dict) -> datetime:
+    """実行状態から前回の実行時間を取り出す。未実行の場合は最小の日時を返す"""
+    if "last_run_time" not in state:
+        return datetime.min.replace(tzinfo=UTC)
+    return datetime.fromisoformat(state["last_run_time"])
 
 
 def get_last_run_time(s3_client: Any, bucket_name: str, object_key: str) -> datetime:
@@ -142,14 +181,7 @@ def get_last_run_time(s3_client: Any, bucket_name: str, object_key: str) -> date
     Returns:
         datetime: 前回の実行時間
     """
-    try:
-        response = s3_client.get_object(Bucket=bucket_name, Key=object_key)
-        last_run_time = json.loads(response["Body"].read().decode("utf-8"))[
-            "last_run_time"
-        ]
-        return datetime.fromisoformat(last_run_time)
-    except s3_client.exceptions.NoSuchKey:
-        return datetime.min.replace(tzinfo=UTC)
+    return parse_last_run_time(load_state(s3_client, bucket_name, object_key))
 
 
 def fetch_feed(feed_url: str):
@@ -245,12 +277,15 @@ def summarize_text(title: str, text: str) -> str:
     return content
 
 
-def simple_post_to_slack(webhook_url: str, text: str) -> requests.Response:
+def simple_post_to_slack(
+    webhook_url: str, text: str, note: str | None = None
+) -> requests.Response:
     """Slackに簡易なテキストを投稿する関数
 
     Args:
         webhook_url (str): SlackのWebhook URL
         text (str): Url
+        note (str | None): URLの下に添える一言
 
     Returns:
         requests.Response: Slackへのリクエストのレスポンス
@@ -262,7 +297,7 @@ def simple_post_to_slack(webhook_url: str, text: str) -> requests.Response:
                 "type": "section",
                 "text": {
                     "type": "mrkdwn",
-                    "text": f"Reference: <{text}>",
+                    "text": f"Reference: <{text}>" + (f"\n{note}" if note else ""),
                 },
             }
         ],
