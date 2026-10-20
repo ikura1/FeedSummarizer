@@ -53,9 +53,9 @@ def test_lambda_handler_fallback_when_summarize_fails(
     assert (
         b"Reference: <https://example.com/article>" in responses.calls[0].request.body
     )
-    # 要約に失敗したことが分かるよう一言添える
+    # 要約に失敗したことと、その理由が分かるよう一言添える
     assert (
-        lambda_function.SUMMARY_FAILED_NOTE.encode("unicode_escape")
+        "（要約できませんでした: TimeoutError）".encode("unicode_escape")
         in responses.calls[0].request.body
     )
     # 失敗した記事でも実行時間が進む
@@ -128,3 +128,15 @@ def test_lambda_handler_skips_already_posted_url(s3_client, monkeypatch):
         "last_run_time": "2021-09-17T00:00:00+00:00",
         "recent_urls": ["https://example.com/article", "https://example.com/new"],
     }
+
+
+def test_summary_failed_note_includes_openai_error_code():
+    # OpenAI SDK の APIError と同じく code 属性を持つ例外
+    class RateLimitError(Exception):
+        code = "insufficient_quota"
+
+    note = lambda_function.summary_failed_note(
+        RateLimitError("You exceeded your current quota, key sk-xxx")
+    )
+
+    assert note == "（要約できませんでした: RateLimitError / insufficient_quota）"
