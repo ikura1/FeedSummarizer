@@ -79,7 +79,10 @@ def test_summarize_text_sends_message(claude_server):
     assert body["system"] == lambda_function.SYSTEM_PROMPT
     assert body["output_config"] == {"effort": "low"}
     assert body["messages"] == [
-        {"role": "user", "content": "【Title】タイトル\n###\n本文"}
+        {
+            "role": "user",
+            "content": "<article>\n【Title】タイトル\n###\n本文\n</article>",
+        }
     ]
 
 
@@ -90,7 +93,7 @@ def test_summarize_text_truncates_long_text(claude_server, monkeypatch):
     summarize_text("t", "abcdef")
 
     content = claude_server["requests"][0]["body"]["messages"][0]["content"]
-    assert content == "【Title】t\n###\nabcd"
+    assert content == "<article>\n【Title】t\n###\nabcd\n</article>"
 
 
 def test_summarize_text_raises_on_refusal(claude_server):
