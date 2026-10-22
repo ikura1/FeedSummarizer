@@ -128,15 +128,3 @@ def test_lambda_handler_skips_already_posted_url(s3_client, monkeypatch):
         "last_run_time": "2021-09-17T00:00:00+00:00",
         "recent_urls": ["https://example.com/article", "https://example.com/new"],
     }
-
-
-def test_summary_failed_note_includes_openai_error_code():
-    # OpenAI SDK の APIError と同じく code 属性を持つ例外
-    class RateLimitError(Exception):
-        code = "insufficient_quota"
-
-    note = lambda_function.summary_failed_note(
-        RateLimitError("You exceeded your current quota, key sk-xxx")
-    )
-
-    assert note == "（要約できませんでした: RateLimitError / insufficient_quota）"

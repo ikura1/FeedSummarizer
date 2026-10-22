@@ -7,12 +7,12 @@ authors = [
 ]
 dependencies = [
     "feedparser>=6.0.11",
-    "openai>=1.23.6",
     "beautifulsoup4>=4.12.3",
     "requests>=2.31.0",
     "boto3>=1.34.93",
     "extractcontent3>=0.0.2",
     "pymupdf>=1.24.7,<2",  # 2.x は onnxruntime 等で Lambda レイヤー上限(250MB)を超える
+    "anthropic>=1",
 ]
 readme = "README.md"
 requires-python = ">=3.12"
