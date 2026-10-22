@@ -122,3 +122,17 @@ def test_summarize_text_raises_on_empty_text():
     # 空の要約を投稿しないよう例外にしてURLのみの投稿に回す
     with pytest.raises(ValueError):
         summarize_text("title", "   ")
+
+
+@responses.activate
+def test_summarize_from_url_skips_too_large_response(fake_summarize, monkeypatch):
+    # 巨大なファイルは直接取得せず、Reader API の本文で要約する
+    monkeypatch.setattr(lambda_function, "MAX_DOWNLOAD_BYTES", 10)
+    monkeypatch.setattr(
+        lambda_function, "get_llm_friendly_text", lambda _url: "reader text"
+    )
+    responses.add(responses.GET, URL, body=b"x" * 100, content_type="text/html")
+
+    summarize_from_url("title", URL)
+
+    assert fake_summarize["text"] == "reader text"

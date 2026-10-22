@@ -1,3 +1,5 @@
+import json
+
 import responses
 from inline_snapshot import snapshot
 
@@ -45,3 +47,27 @@ def test_simple_post_to_slack():
         b'{"unfurl_links": true, "blocks": [{"type": "section", "text": {"type": "mrkdwn", "text": "Reference: <Hello, world!>"}}]}'
     )
     assert len(responses.calls) == 1, "Should have made one HTTP call to Slack"
+
+
+@responses.activate
+def test_post_to_slack_escapes_control_sequences():
+    webhook_url = "https://hooks.slack.com/services/T00000000/B00000000/XXXX"
+    responses.add(responses.POST, webhook_url, status=200)
+
+    # 記事のタイトルや要約に含まれる <!channel> でメンションが飛ばないようにする
+    post_to_slack(
+        webhook_url,
+        "https://example.com",
+        "<!channel> title",
+        "• A & B <script>",
+        "<@U123>",
+        None,
+    )
+
+    body = json.loads(responses.calls[0].request.body)
+    attachment = body["attachments"][0]
+    assert attachment["title"] == "&lt;!channel&gt; title"
+    assert attachment["pretext"] == "&lt;@U123&gt;"
+    assert attachment["fields"][0]["value"] == "• A &amp; B &lt;script&gt;"
+    # URL はそのままリンクとして使う
+    assert attachment["title_link"] == "https://example.com"
